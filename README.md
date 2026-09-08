@@ -1,1 +1,127 @@
-# containerization-and-orchestration-labs
+# Containerization & Orchestration Labs
+
+Учебный репозиторий команды из 3 студентов для выполнения лабораторных работ по контейнеризации и оркестрации.
+
+## 👥 Команда
+
+| Участник  | GitHub                                   | Telegram |
+| --------- | ---------------------------------------- | ---------------------------------------- |
+| Student 1 | [@Kailber](https://github.com/Kailber)   | [@beverss](https://t.me/beverss)         |
+| Student 2 | [@username](https://github.com/username) | [@username](https://github.com/username) |
+| Student 3 | [@username](https://github.com/username) | [@username](https://github.com/username) |
+
+## 📚 Лабораторные работы
+
+| №  | Тема                  | Статус         |
+| -- | --------------------- | -------------- |
+| 01 | Свой Docker           | 🟡 In progress  |
+| 02 | Мониторинг сервиса: метрики, логи, трейсы        | ⚪ Not started  |
+
+### Статусы
+
+* 🟢 Done
+* 🟡 In progress
+* ⚪ Not started
+
+## 🛠️ Технологии
+
+* Docker
+* Kubernetes
+* Git / GitHub
+
+## 📁 Структура проекта
+
+```text
+.
+├── lab01/
+├── lab02/
+├── lab03/
+├── lab04/
+├── lab05/
+└── README.md
+```
+
+Каждая лабораторная работа находится в отдельной директории и содержит собственный `README.md` с инструкцией по запуску и описанием решения.
+
+## 🚀 Как работать с репозиторием
+
+Клонировать репозиторий:
+
+```bash
+git clone https://github.com/<organization-or-user>/containerization-and-orchestration-labs.git
+cd containerization-and-orchestration-labs
+```
+
+Перед началом работы:
+
+```bash
+git pull
+```
+
+После внесения изменений:
+
+```bash
+git add .
+git commit -m "lab01: add Dockerfile"
+git push
+```
+
+## 🌿 Git workflow
+
+Для каждой лабораторной рекомендуется создавать отдельную ветку:
+
+```text
+main
+ ├── lab01
+ ├── lab02
+ ├── lab03
+ └── lab04
+```
+
+Пример:
+
+```bash
+git checkout -b lab01
+```
+
+После завершения работы создаётся Pull Request в `main`.
+
+## 📝 Правила коммитов
+
+Рекомендуемый формат:
+
+```text
+lab01: add Dockerfile
+lab01: configure container networking
+lab02: add docker compose
+lab03: fix healthcheck
+lab04: add Kubernetes deployment
+```
+
+## 🔀 Pull Requests
+
+Перед merge в `main` желательно:
+
+1. Убедиться, что лабораторная запускается.
+2. Проверить README лабораторной.
+3. Удалить временные файлы и секреты.
+4. Убедиться, что `git status` не содержит лишних файлов.
+5. Получить review от другого участника команды.
+
+## 🔐 Secrets
+
+Не коммитить в репозиторий:
+
+* `.env`
+* пароли
+* API keys
+* SSH keys
+* kubeconfig
+* credentials
+* приватные сертификаты
+
+## 📖 Лабораторные
+
+Подробная информация о каждой лабораторной находится в соответствующей директории:
+
+* [Lab 01](./lab01/)
