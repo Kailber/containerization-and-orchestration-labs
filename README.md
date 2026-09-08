@@ -7,8 +7,8 @@
 | Участник  | GitHub                                   | Telegram |
 | --------- | ---------------------------------------- | ---------------------------------------- |
 | Student 1 | [@Kailber](https://github.com/Kailber)   | [@beverss](https://t.me/beverss)         |
-| Student 2 | [@username](https://github.com/username) | [@username](https://github.com/username) |
-| Student 3 | [@username](https://github.com/username) | [@username](https://github.com/username) |
+| Student 2 | [@12262004-m](https://github.com/12262004-m) | [@MpAsSgHA](https://t.me/MpAsSgHA) |
+| Student 3 | [@Diminasss](https://github.com/Diminasss) | [@diminass](https://t.me/diminass) |
 
 ## 📚 Лабораторные работы
 
