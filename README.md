@@ -6,9 +6,9 @@
 
 | Участник  | GitHub                                   | Telegram |
 | --------- | ---------------------------------------- | ---------------------------------------- |
-| Student 1 | [@Kailber](https://github.com/Kailber)   | [@beverss](https://t.me/beverss)         |
-| Student 2 | [@12262004-m](https://github.com/12262004-m) | [@MpAsSgHA](https://t.me/MpAsSgHA) |
-| Student 3 | [@Diminasss](https://github.com/Diminasss) | [@diminass](https://t.me/diminass) |
+| Student 1 | [Kailber](https://github.com/Kailber)   | [@beverss](https://t.me/beverss)         |
+| Student 2 | [12262004-m](https://github.com/12262004-m) | [@MpAsSgHA](https://t.me/MpAsSgHA) |
+| Student 3 | [Diminasss](https://github.com/Diminasss) | [@diminass](https://t.me/diminass) |
 
 ## 📚 Лабораторные работы
 
@@ -33,11 +33,11 @@
 
 ```text
 .
-├── lab01/
-├── lab02/
-├── lab03/
-├── lab04/
-├── lab05/
+├── lab1/
+├── lab2/
+├── lab3/
+├── lab4/
+├── lab5/
 └── README.md
 ```
 
@@ -48,7 +48,7 @@
 Клонировать репозиторий:
 
 ```bash
-git clone https://github.com/<organization-or-user>/containerization-and-orchestration-labs.git
+git clone https://github.com/Kailber/containerization-and-orchestration-labs.git
 cd containerization-and-orchestration-labs
 ```
 
@@ -72,16 +72,16 @@ git push
 
 ```text
 main
- ├── lab01
- ├── lab02
- ├── lab03
- └── lab04
+ ├── lab1
+ ├── lab2
+ ├── lab3
+ └── lab4
 ```
 
 Пример:
 
 ```bash
-git checkout -b lab01
+git checkout -b lab1
 ```
 
 После завершения работы создаётся Pull Request в `main`.
@@ -106,7 +106,6 @@ lab04: add Kubernetes deployment
 2. Проверить README лабораторной.
 3. Удалить временные файлы и секреты.
 4. Убедиться, что `git status` не содержит лишних файлов.
-5. Получить review от другого участника команды.
 
 ## 🔐 Secrets
 
@@ -124,4 +123,4 @@ lab04: add Kubernetes deployment
 
 Подробная информация о каждой лабораторной находится в соответствующей директории:
 
-* [Lab 01](./lab01/)
+* [Lab 1](./lab1/)
