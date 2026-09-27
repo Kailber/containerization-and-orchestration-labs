@@ -309,3 +309,5 @@ enosys --syscall getppid:EPERM --dump > seccomp.bpf
 
 ![](images/part4/16WorkWithAll.png)
 
+capabilites регулируют базовые права на какие-то действия в целом с окружающими интерфейсами. А seccomp работают только с системными вызовами.
+

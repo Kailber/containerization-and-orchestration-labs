@@ -4,7 +4,17 @@ set -e
 
 echo "Starting API in isolated namespaces..."
 
-exec unshare \
+systemd-run \
+--user \
+--scope \
+--collect \
+--unit=lab1-memory \
+-p MemoryMax=128M \
+-p MemorySwapMax=0 \
+-p CPUQuota=50% \
+-p TasksMax=20 \
+-p TimeoutStopSec=5s \
+    unshare \
     --pid \
     --mount \
     --net \
