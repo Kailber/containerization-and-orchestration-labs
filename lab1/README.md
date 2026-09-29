@@ -4,13 +4,35 @@
 
 ```text
 lab1/
+├── Dockerfile
 ├── README.md
 ├── go.mod
+├── lab.md
 ├── mydocker.sh
+├── api/
+│   ├── main.go
+│   ├── api
+│   └── api_static
+├── gvisor-bundle/
+│   ├── config.json
+│   └── rootfs/
+│       └── api
 ├── images/
-└── api/
-    ├── main.go
-    └── api
+│   ├── part1/
+│   ├── part2/
+│   ├── part3/
+│   ├── part4/
+│   ├── Part5/
+│   ├── Part6/
+│   ├── part7/
+│   └── part8/
+├── monitoring/
+│   ├── graph.py
+│   ├── metrics.csv
+│   └── metrics.sh
+└── seccomp/
+    ├── seccomp.bpf
+    └── seccompForDocker.json
 ```
 
 ---
