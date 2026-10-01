@@ -1,0 +1,32 @@
+{
+  "ociVersion": "1.0.0",
+  "process": {
+    "terminal": false,
+    "user": { "uid": 0, "gid": 0 },
+    "args": ["/api"],
+    "env": ["PATH=/"],
+    "cwd": "/",
+    "capabilities": {
+      "bounding": [],
+      "effective": [],
+      "permitted": [],
+      "inheritable": [],
+      "ambient": []
+    },
+    "noNewPrivileges": true
+  },
+  "root": {
+    "path": "rootfs",
+    "readonly": false
+  },
+  "hostname": "gvisor-api",
+  "linux": {
+    "namespaces": [
+      { "type": "pid" },
+      { "type": "mount" },
+      { "type": "network" },
+      { "type": "uts" },
+      { "type": "ipc" }
+    ]
+  }
+}
