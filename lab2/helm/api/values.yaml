@@ -1,0 +1,10 @@
+image:
+  repository: lab2-api
+  tag: local
+  pullPolicy: Never
+
+service:
+  type: ClusterIP
+  port: 8080
+
+replicaCount: 1
