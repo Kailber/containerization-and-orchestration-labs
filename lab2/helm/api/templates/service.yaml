@@ -3,6 +3,8 @@ kind: Service
 
 metadata:
   name: {{ .Release.Name }}-api
+  labels:
+    app: api
 
 spec:
   type: {{ .Values.service.type }}
@@ -11,6 +13,7 @@ spec:
     app: api
 
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: {{ .Values.service.port }}
       targetPort: 8080
