@@ -10,6 +10,14 @@ grafana:
       memory: 128Mi
     limits:
       memory: 512Mi
+  
+  additionalDataSources:
+    - name: loki
+      uid: loki
+      type: loki
+      access: proxy
+      url: http://loki-gateway.lab2.svc.cluster.local
+      editable: false
 
 prometheus:
   prometheusSpec:

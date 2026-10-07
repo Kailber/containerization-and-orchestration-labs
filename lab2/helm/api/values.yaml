@@ -1,6 +1,6 @@
 image:
   repository: lab2-api
-  tag: local
+  tag: logs
   pullPolicy: Never
 
 service:

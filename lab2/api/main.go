@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -67,6 +68,19 @@ func observe(
 		method,
 		path,
 	).Observe(duration.Seconds())
+
+	fields := []any{
+		"method", method,
+		"path", path,
+		"status", status,
+		"duration_ms", float64(duration) / float64(time.Millisecond),
+	}
+
+	if status >= 500 {
+		slog.Error("request completed", fields...)
+	} else {
+		slog.Info("request completed", fields...)
+	}
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
@@ -125,7 +139,11 @@ func loadHandler(w http.ResponseWriter, r *http.Request) {
 		resp, err := client.Get("http://127.0.0.1:8080/health")
 
 		if err != nil {
-			log.Printf("load request failed: %v", err)
+			slog.Error(
+				"load request failed",
+				"path", "/load",
+				"error", err.Error(),
+			)
 			continue
 		}
 
@@ -144,6 +162,11 @@ func loadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	logger := slog.New(
+		slog.NewJSONHandler(os.Stdout, nil),
+	)
+	slog.SetDefault(logger)
+
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/fail", failHandler)
 	http.HandleFunc("/slow", slowHandler)
@@ -151,9 +174,10 @@ func main() {
 
 	http.Handle("/metrics", promhttp.Handler())
 
-	log.Println("api is listening on :8080")
+	slog.Info("api is listening", "address", ":8080")
 
 	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatal(err)
+		slog.Error("server stopped", "error", err.Error())
+		os.Exit(1)
 	}
 }
