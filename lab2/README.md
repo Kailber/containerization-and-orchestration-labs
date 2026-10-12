@@ -21,21 +21,33 @@ lab2/
 │   │   ├── dashboards/
 │   │   │   └── red.json
 │   │   └── templates/
+│   │       ├── alerts.yaml
 │   │       ├── dashboard.yaml
 │   │       ├── deployment.yaml
 │   │       ├── monitoring.yaml
 │   │       └── service.yaml
-│   └── jaeger/
+│   ├── jaeger/
+│   │   ├── Chart.yaml
+│   │   ├── values.yaml
+│   │   └── templates/
+│   │       ├── configmap.yaml
+│   │       ├── deployment.yaml
+│   │       └── service.yaml
+│   └── alerting/
 │       ├── Chart.yaml
 │       ├── values.yaml
+│       ├── files/
+│       │   └── webhook.py
 │       └── templates/
-│           ├── configmap.yaml
-│           ├── deployment.yaml
-│           └── service.yaml
+│           ├── karma.yaml
+│           └── webhook.yaml
+├── evidence/
+│   └── alertmanager-webhook.jsonl
 └── images/
     ├── part1/
     ├── part2/
-    └── Part3/
+    ├── Part3/
+    └── Part4/
 ```
 
 ---
@@ -284,4 +296,151 @@ span_id:  ce7f445e68397985
 
 # Часть 4 — Алерты (Alertmanager + Karma)
 
-На текущем этапе Alertmanager установлен вместе с `kube-prometheus-stack`. Собственные три критичных правила алертинга, получатель уведомлений, Karma и проверка состояний `firing` пока не реализованы. Эта часть лабораторной остается следующей задачей.
+В этой части настроены три критичных алерта, доставка уведомлений в webhook и отображение активных алертов в Karma. Alertmanager уже был установлен вместе с `kube-prometheus-stack`.
+
+Роли компонентов разделены следующим образом:
+
+```text
+Prometheus вычисляет правила → Alertmanager группирует алерты
+                                      ├→ webhook принимает уведомления
+                                      └← Karma запрашивает активные алерты
+```
+
+## Правила и выбор порогов
+
+Правила описаны в `helm/api/templates/alerts.yaml` как ресурс `PrometheusRule`. Метка `release: monitoring` позволяет Prometheus Operator выбрать этот ресурс. Пороги вынесены в секцию `alerts` файла `helm/api/values.yaml`.
+
+Все три правила имеют метки `severity=critical`, `app=api`, `namespace=lab2` и `service=api-api`. Группа `lab2-api` вычисляется каждые 15 секунд. Условие должно сохраняться в течение `for: 2m`: сначала алерт находится в `pending`, затем переходит в `firing`.
+
+| Алерт | Условие | Почему это критично | Действия дежурного |
+| --- | --- | --- | --- |
+| `ApiHighErrorRate` | Доля ответов 5xx за окно 2 минуты выше 10%, при интенсивности не менее 0.1 запроса/с | Существенная часть пользовательских операций завершается ошибкой | Проверить логи, найти ошибочные трейсы по `trace_id`, проверить зависимости и последние изменения приложения |
+| `ApiHighLatency` | p95 по отдельному эндпоинту за окно 2 минуты выше 1 секунды, при интенсивности этого эндпоинта не менее 0.1 запроса/с | Пользователь ждет ответа слишком долго; возможны таймауты клиентов и накопление запросов | Определить `path` из меток алерта, открыть медленный трейс, проверить долгую операцию, ресурсы и зависимости |
+| `ApiUnavailable` | Нет ни одного успешно опрашиваемого экземпляра API либо все цели исчезли из обнаружения | Возможна полная недоступность сервиса | Проверить Deployment, реплики, Pod, события, Service и EndpointSlice, доступ к `/health` и `/metrics`; восстановить API |
+
+Порог задержки в 1 секунду принят как учебное требование к API, а `/slow` намеренно его нарушает. На реальном проекте пороги выбирались бы из SLO и требований пользователей. Ограничение минимальной интенсивности снижает вероятность срабатывания по единичному запросу. p95 рассчитывается по гистограмме и зависит от границ бакетов, поэтому точную длительность отдельного запроса проверяем в Jaeger.
+
+Доля ошибок вычисляется как отношение `sum(rate(http_requests_total{status=~"5.."}[2m]))` к скорости всех запросов с фильтрами namespace и service. Для задержки используется `histogram_quantile(0.95, ...)` с группировкой по `le` и `path`: большое число быстрых запросов `/health` не скрывает медленный `/slow`.
+
+Для недоступности используется выражение:
+
+```promql
+(sum(up{namespace="lab2",service="api-api"}) or vector(0)) == 0
+```
+
+`up` равно 1 при успешном scrape и 0 при неудачном. Если все Pod удалены, временные ряды целей могут исчезнуть; `or vector(0)` позволяет обнаружить и этот случай. Успешный scrape подтверждает доступность `/metrics`, но не доказывает исправность всех пользовательских операций — ошибки и задержки контролируются отдельными правилами.
+
+После обновления Helm-релиза API правила появились в разделе Alerts Prometheus. До создания нагрузки все три находились в состоянии `inactive`:
+
+![Правило высокой доли ошибок](<images/Part4/15 prometheus p1.png>)
+
+![Правило высокой задержки](<images/Part4/16 prometheus p2.png>)
+
+![Правило недоступности API](<images/Part4/17 prometheus p3.png>)
+
+## Получатель уведомлений и Karma
+
+Для новых компонентов создан Helm-чарт `helm/alerting`. Он разворачивает два Deployment с Service:
+
+- `alerting-webhook` — небольшой HTTP-сервис на Python, код которого хранится в ConfigMap. Принимает POST `/alerts`, выводит JSON уведомления в stdout и отвечает HTTP 200. Это позволяет проверить фактическую доставку без подключения внешней почты или мессенджера.
+- `alerting-karma` — Karma `v0.133`, подключенная к `http://monitoring-kube-prometheus-alertmanager.lab2.svc.cluster.local:9093` через переменную `ALERTMANAGER_URI`.
+
+В `helm/monitoring-values.yaml` добавлена конфигурация Alertmanager. Алерты с метками `app="api"` и `namespace="lab2"` направляются получателю `lab2-webhook` по адресу `http://alerting-webhook.lab2.svc.cluster.local:8080/alerts`. Остальные попадают в получатель `null`, который не отправляет уведомления; при этом такие алерты могут отображаться в интерфейсах.
+
+Для группировки используются `namespace`, `alertname` и `service`. Первая отправка задерживается на `group_wait: 10s`, изменения группы отправляются с интервалом `group_interval: 30s`, повторные уведомления — с `repeat_interval: 5m`. Параметр `send_resolved: true` включает отправку уведомления о прекращении срабатывания.
+
+Установка выполнена из директории `lab2`:
+
+```bash
+helm upgrade --install alerting ./helm/alerting -n lab2 --wait --timeout 5m
+
+helm upgrade monitoring prometheus-community/kube-prometheus-stack \
+  -n lab2 --reuse-values -f ./helm/monitoring-values.yaml \
+  --wait --timeout 10m
+```
+
+В нашем окружении применялся описанный в части 3 префикс `env -u ...`, чтобы локальные обращения к Kubernetes API не шли через прокси.
+
+Для просмотра использованы следующие пробросы портов, каждый в отдельном терминале:
+
+```bash
+minikube kubectl -- port-forward -n lab2 svc/monitoring-kube-prometheus-prometheus 9090:9090
+minikube kubectl -- port-forward -n lab2 svc/monitoring-kube-prometheus-alertmanager 9093:9093
+minikube kubectl -- port-forward -n lab2 svc/alerting-karma 8082:8080
+```
+
+В Karma (`http://localhost:8082`) установлен фильтр `app=api`. В Alertmanager (`http://localhost:9093`) добавлен matcher `app="api"` без фигурных скобок. Эти фильтры отделяют алерты нашего сервиса от штатных алертов кластера.
+
+## Проверка ошибок и задержки
+
+Для создания нагрузки использовался цикл с чередованием `/fail` и `/slow`:
+
+```bash
+for i in {1..100}; do
+  curl --noproxy '*' -sS --max-time 5 http://localhost:8081/fail > /dev/null
+  curl --noproxy '*' -sS --max-time 5 http://localhost:8081/slow > /dev/null
+  sleep 1
+done
+```
+
+При такой нагрузке примерно половина запросов возвращает 500, а задержка `/slow` превышает установленный порог. После выдержки оба алерта перешли в `firing`; `ApiUnavailable` оставался неактивным, поскольку сервис продолжал отвечать:
+
+![Два алерта в состоянии firing в Prometheus](<images/Part4/18 prometheus firing.png>)
+
+В Karma появились две отдельные группы. В них видны серьезность, описание проблемы, действия дежурного и метка `path=/slow` у алерта задержки:
+
+![Алерты ошибок и задержки в Karma](<images/Part4/19 karma alerts.png>)
+
+Доставку проверили по логам получателя:
+
+```bash
+minikube kubectl -- logs -n lab2 deployment/alerting-webhook --tail=20
+```
+
+В stdout появились записи `event=alert_notification`, `receiver=lab2-webhook`, `status=firing` для `ApiHighErrorRate` и `ApiHighLatency`. Таким образом, подтверждено не только вычисление правил, но и получение уведомлений отдельным сервисом:
+
+![Получение webhook-уведомлений](<images/Part4/20 webhook.png>)
+
+Оба алерта также зафиксированы в штатном интерфейсе Alertmanager с получателем `lab2-webhook`:
+
+![Алерты ошибок и задержки в Alertmanager](<images/Part4/21 alert manager.png>)
+
+## Проверка полной недоступности
+
+После остановки цикла число реплик API временно уменьшено до нуля через Helm:
+
+```bash
+helm upgrade api ./helm/api -n lab2 --set replicaCount=0 --wait --timeout 5m
+```
+
+Pod исчез, и после выдержки сработал `ApiUnavailable`. Алерты ошибок и задержки погасли: без запросов условия их минимальной интенсивности перестали выполняться. Это само по себе не означает исправность сервиса — недоступность контролируется третьим правилом.
+
+![ApiUnavailable в состоянии firing в Prometheus](<images/Part4/22 api unavailable prometheus.png>)
+
+![ApiUnavailable в Alertmanager](<images/Part4/23 api unavailable alert manager.png>)
+
+![ApiUnavailable в Karma](<images/Part4/24 api unavailable karma.png>)
+
+После фиксации результатов API восстановлен:
+
+```bash
+helm upgrade api ./helm/api -n lab2 --set replicaCount=1 --wait --timeout 5m
+```
+
+Обновление завершилось успешно, релиз `api` получил статус `deployed` и ревизию 7. После возобновления успешного scrape условие недоступности перестало выполняться, и webhook получил уведомление `resolved`.
+
+## Подтверждение доставки и восстановления
+
+Полный полученный вывод сохранен в [evidence/alertmanager-webhook.jsonl](evidence/alertmanager-webhook.jsonl). Файл содержит 10 JSON-уведомлений, включая повторную проверку ошибок и задержки. Для каждого из трех алертов присутствуют состояния `firing` и `resolved`.
+
+| Алерт | Получено первое `firing` | Получено `resolved` для этой проверки |
+| --- | --- | --- |
+| `ApiHighErrorRate` | 12.10.2026, 03:54:34 | 12.10.2026, 03:58:34 |
+| `ApiHighLatency` | 12.10.2026, 03:54:49 | 12.10.2026, 03:58:49 |
+| `ApiUnavailable` | 12.10.2026, 04:10:49 | 12.10.2026, 04:13:49 |
+
+В таблице указано московское время получения уведомлений (UTC+3); исходные JSON-записи содержат UTC. У `ApiUnavailable` поле `endsAt` равно `2026-10-12T01:13:39.002Z`, а сообщение о восстановлении получено в `2026-10-12T01:13:49.021414+00:00`. Проверка охватила полный цикл: возникновение условия → `firing` → доставка → восстановление API → доставка `resolved`.
+
+# Результат лабораторной
+
+В Kubernetes через Helm развернуты API и стек мониторинга: Prometheus, Grafana, Loki, Alloy, Jaeger, Alertmanager, Karma и webhook-получатель. Проверены RED-метрики, поиск ошибки в логах, медленный и ошибочный трейсы, связь лога с трейсом по ID, срабатывание трех критичных алертов и доставка уведомлений об их снятии. После эксперимента API восстановлен до одной реплики.
