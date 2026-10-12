@@ -1,0 +1,74 @@
+{{- if .Values.alerts.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-api-alerts
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: lab2-api
+      interval: 15s
+      rules:
+        - alert: ApiHighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{namespace="{{ .Release.Namespace }}",service="{{ .Release.Name }}-api",status=~"5.."}[{{ .Values.alerts.window }}]))
+              /
+              sum(rate(http_requests_total{namespace="{{ .Release.Namespace }}",service="{{ .Release.Name }}-api"}[{{ .Values.alerts.window }}]))
+              > {{ .Values.alerts.errorRatio }}
+            )
+            and
+            (
+              sum(rate(http_requests_total{namespace="{{ .Release.Namespace }}",service="{{ .Release.Name }}-api"}[{{ .Values.alerts.window }}]))
+              >= {{ .Values.alerts.minRequestRate }}
+            )
+          for: {{ .Values.alerts.for }}
+          labels:
+            severity: critical
+            app: api
+            namespace: {{ .Release.Namespace | quote }}
+            service: {{ printf "%s-api" .Release.Name | quote }}
+          annotations:
+            summary: "API: высокая доля ответов 5xx"
+            description: "Доля 5xx выше {{ .Values.alerts.errorRatio }} в течение {{ .Values.alerts.for }}. Пользовательские запросы завершаются ошибками."
+            action: "Проверить логи /fail и других обработчиков, найти trace_id в Jaeger, проверить зависимости и последние изменения приложения."
+        - alert: ApiHighLatency
+          expr: |
+            (
+              histogram_quantile(0.95,
+                sum by (le, path) (
+                  rate(http_request_duration_seconds_bucket{namespace="{{ .Release.Namespace }}",service="{{ .Release.Name }}-api"}[{{ .Values.alerts.window }}])
+                )
+              ) > {{ .Values.alerts.latencySeconds }}
+            )
+            and on (path)
+            (
+              sum by (path) (
+                rate(http_request_duration_seconds_count{namespace="{{ .Release.Namespace }}",service="{{ .Release.Name }}-api"}[{{ .Values.alerts.window }}])
+              ) >= {{ .Values.alerts.minRequestRate }}
+            )
+          for: {{ .Values.alerts.for }}
+          labels:
+            severity: critical
+            app: api
+            namespace: {{ .Release.Namespace | quote }}
+            service: {{ printf "%s-api" .Release.Name | quote }}
+          annotations:
+            summary: "API: высокая p95 длительности запросов"
+            description: "p95 по эндпоинту выше {{ .Values.alerts.latencySeconds }} с в течение {{ .Values.alerts.for }}. Пользователи сталкиваются с длительным ожиданием ответа."
+            action: "Проверить path в метках алерта, открыть медленный трейс в Jaeger, определить долгую операцию и проверить ресурсы и зависимости."
+        - alert: ApiUnavailable
+          expr: |
+            (sum(up{namespace="{{ .Release.Namespace }}",service="{{ .Release.Name }}-api"}) or vector(0)) == 0
+          for: {{ .Values.alerts.for }}
+          labels:
+            severity: critical
+            app: api
+            namespace: {{ .Release.Namespace | quote }}
+            service: {{ printf "%s-api" .Release.Name | quote }}
+          annotations:
+            summary: "API: нет доступных целей сбора метрик"
+            description: "Prometheus не может опросить ни один экземпляр API в течение {{ .Values.alerts.for }} либо цели исчезли из обнаружения. Возможна полная недоступность сервиса."
+            action: "Проверить Deployment, число реплик, Pod и события, Service и EndpointSlice; проверить доступ к /health и /metrics, затем восстановить работу API."
+{{- end }}

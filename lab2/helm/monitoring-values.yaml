@@ -41,6 +41,27 @@ prometheus:
 alertmanager:
   enabled: true
 
+  config:
+    global:
+      resolve_timeout: 1m
+    route:
+      receiver: "null"
+      group_by: [namespace, alertname, service]
+      group_wait: 10s
+      group_interval: 30s
+      repeat_interval: 5m
+      routes:
+        - receiver: lab2-webhook
+          matchers:
+            - 'app="api"'
+            - 'namespace="lab2"'
+    receivers:
+      - name: "null"
+      - name: lab2-webhook
+        webhook_configs:
+          - url: http://alerting-webhook.lab2.svc.cluster.local:8080/alerts
+            send_resolved: true
+
   alertmanagerSpec:
     resources:
       requests:
