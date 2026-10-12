@@ -5,6 +5,7 @@
 ```text
 lab2/
 ├── README.md
+├── lab.md
 ├── api/
 │   ├── Dockerfile
 │   ├── go.mod
@@ -14,19 +15,27 @@ lab2/
 │   ├── alloy-values.yaml
 │   ├── loki-values.yaml
 │   ├── monitoring-values.yaml
-│   └── api/
+│   ├── api/
+│   │   ├── Chart.yaml
+│   │   ├── values.yaml
+│   │   ├── dashboards/
+│   │   │   └── red.json
+│   │   └── templates/
+│   │       ├── dashboard.yaml
+│   │       ├── deployment.yaml
+│   │       ├── monitoring.yaml
+│   │       └── service.yaml
+│   └── jaeger/
 │       ├── Chart.yaml
 │       ├── values.yaml
-│       ├── dashboards
-│       │   └── red.json
-│       └── templates
-│           └── dashboard.yaml
-│           └── deployment.yaml
-│           └── monitoring.yaml
+│       └── templates/
+│           ├── configmap.yaml
+│           ├── deployment.yaml
 │           └── service.yaml
-├── images/
-│   ├── part1/
-│   ├── part2/
+└── images/
+    ├── part1/
+    ├── part2/
+    └── Part3/
 ```
 
 ---
@@ -60,7 +69,8 @@ lab2/
 Через Helm-чарт были установлены Prometheus, Grafana, Prometheus Operator и Alertmanager, все настройки были вынесены в отдельный файл `helm/monitoring-values.yaml`
 
 ```bash
-helm upgrade --install monitoring prometheus-community/kube-prometheus-stack --values ./helm/monitoring-values.yaml
+helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+  --namespace lab2 --create-namespace --values ./helm/monitoring-values.yaml
 ```
 
 Для сбора метрик был обавлен объект ServiceMonitor, который необходим для подключения api к Prometheus. Его настройки лежат в файле `helm/api/templates/monitoring.yaml`
@@ -116,7 +126,7 @@ helm upgrade --install monitoring prometheus-community/kube-prometheus-stack --v
 
 
 # Часть 2 — Логи (Loki + Grafana)
-Первым делом было добавлено логирование с помощью стандартной библиотеки log/slog. Логирование запросов было добавлено в функцию `observe()`, которая записывает следующие метрики:
+Первым делом было добавлено логирование с помощью стандартной библиотеки log/slog. Логирование запросов было добавлено в функцию `observe()`, которая записывает следующие поля:
 
 | Поле | Назначение |
 | ----- | ----------- |
@@ -141,7 +151,7 @@ helm upgrade --install monitoring prometheus-community/kube-prometheus-stack --v
 
 Все настройки Loki сохранены в `helm/loki-values.yaml`: прием, хранение и поиск логов выполняются одним процессом Loki, дополнительно были отключены группы backend, read и write, а также отключены дополнительные кеши для ускоренной загрузки образа (в рамках данной лабораторной работы они нам не потребовались и лишь съедали бы ресурсы)
 
-Дополнительно установлен агент Grafana Alloy для обработки и отправки логов непосредственно в Grafana. В конфиге агента (файл `helm/alloy-values.yaml`) содержится три основных компонента: discovery.kubernetes (ищет поды api), loki.source.kubernetes (читает логи), loki.write (отправляет записи).
+Дополнительно установлен агент Grafana Alloy для сбора и отправки логов в Loki. Grafana запрашивает записи из Loki для отображения. В конфиге агента (файл `helm/alloy-values.yaml`) содержится три основных компонента: discovery.kubernetes (ищет поды api), loki.source.kubernetes (читает логи через Kubernetes API), loki.write (отправляет записи в Loki). Alloy развернут как DaemonSet, а поиск ограничен подами с меткой `app=api` в namespace `lab2` на своей ноде, чтобы агенты не дублировали сбор.
 
 ## Loki + Grafana
 В существующую Grafana был добавлен источник данных Loki
@@ -151,3 +161,127 @@ helm upgrade --install monitoring prometheus-community/kube-prometheus-stack --v
 После проверки подключения настройки источника были сохранены файле `helm/monitoring-values.yaml`, а затем были вызваны эндпоинты для получения логов в Grafana. В разделе Explore был выбран источник Loki и отправлен запрос `{app="api"}`. В результате все логи (и старые, и новые) успешно отобразились в панели мониторинга:
 
 ![Логи Loki](images/part2/9-loki-logs.png)
+
+# Часть 3 — Трейсы (OpenTelemetry + Jaeger)
+
+В этой части сервис был инструментирован OpenTelemetry, а для приема, хранения и просмотра трейсов развернут Jaeger. Метрики показывают общую интенсивность запросов, ошибки и задержки, а трейс позволяет разобрать выполнение конкретного запроса и увидеть, на какую операцию ушло время.
+
+## Инструментирование API
+
+В `api/main.go` подключены OpenTelemetry SDK, HTTP-инструментарий `otelhttp` и OTLP/HTTP-экспортер. Обработчики `/health`, `/fail`, `/slow` и `/load` обернуты в `otelhttp.NewHandler`: библиотека создает серверный спан и помещает его в контекст запроса. Если входящий запрос уже содержит trace context, серверный спан продолжает существующий трейс. Эндпоинт `/metrics` оставлен без трассировки, чтобы опросы Prometheus не заполняли хранилище трейсов.
+
+В обработчиках добавлены следующие действия:
+
+| Обработчик | Что записывается в трейс |
+| --- | --- |
+| `/slow` | Вложенный спан `slow-op` вокруг задержки на 1–3 секунды; атрибут `sleep.duration_ms` содержит заданную задержку |
+| `/fail` | Статус спана `Error` и событие исключения с сообщением `intentional failure from /fail` |
+| `/load` | Инструментированный HTTP-клиент передает контекст во внутренние запросы `/health`, связывая их с исходным запросом |
+
+Функция `observe()` получает контекст запроса и добавляет в JSON-лог `trace_id` и `span_id`. Эти идентификаторы связывают запись лога с конкретным трейсом и спаном. У служебных сообщений вне HTTP-запросов, например при запуске приложения, текущего спана нет.
+
+В учебном стенде включен `AlwaysSample`, чтобы сохранялись все инструментированные запросы. Спаны отправляются пакетами; при штатном завершении API выполняется сброс накопленных трейсов.
+
+## Развертывание Jaeger и обновление API
+
+Для Jaeger создан отдельный Helm-чарт `helm/jaeger`. Он разворачивает Jaeger `2.22.0` в одном Pod: OTLP-приемник, хранилище в памяти и интерфейс поиска работают вместе. Конфигурация хранится в ConfigMap и передается процессу через `--config`.
+
+| Параметр | Значение |
+| --- | --- |
+| Прием трейсов | OTLP/HTTP, порт `4318` |
+| Web UI | Порт `16686` |
+| Хранилище | В памяти, до 5000 трейсов |
+| Ресурсы | Requests: 100m CPU и 128Mi памяти; лимит памяти: 512Mi |
+
+Хранение в памяти подходит для демонстрации: отдельная база данных не требуется, но после перезапуска Pod трейсы теряются.
+
+В `helm/api/values.yaml` указан образ `lab2-api:traces` и настройки трассировки. Шаблон Deployment передает их контейнеру как переменные окружения:
+
+```text
+OTEL_SERVICE_NAME=api
+OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger.lab2.svc.cluster.local:4318
+```
+
+Таким образом, API отправляет спаны напрямую в Jaeger внутри кластера. Alloy продолжает собирать логи и в передаче трейсов не участвует.
+
+Команды выполнялись из директории `lab2` при уже работающем Minikube и установленном стеке метрик и логов:
+
+```bash
+docker build -t lab2-api:traces ./api
+minikube image load lab2-api:traces
+
+helm upgrade --install jaeger ./helm/jaeger -n lab2 --wait --timeout 5m
+helm upgrade --install api ./helm/api -n lab2 --wait --timeout 5m
+```
+
+Образ загружен внутрь Minikube, поскольку в чарте API используется `imagePullPolicy: Never`. При установке Helm в нашем окружении возникал `EOF` при обращении к Kubernetes API через прокси. Для устранения ошибки команды Helm и kubectl запускались с префиксом:
+
+```bash
+env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
+    -u http_proxy -u https_proxy -u all_proxy <команда>
+```
+
+Доступ к Jaeger и API был открыт через port-forward. Каждая команда остается работать в отдельном терминале:
+
+```bash
+minikube kubectl -- port-forward -n lab2 svc/jaeger 16686:16686
+```
+
+```bash
+minikube kubectl -- port-forward -n lab2 svc/api-api 8081:8080
+```
+
+Jaeger UI доступен по `http://localhost:16686`. Для API использован локальный порт `8081`, поскольку `8080` был занят предыдущим port-forward. При отказе доступа к Docker в новом терминале выполнялась команда `newgrp docker`, активирующая уже добавленное членство пользователя в группе.
+
+## Трейс медленного запроса
+
+Для проверки вызван эндпоинт `/slow`:
+
+```bash
+curl --noproxy '*' http://localhost:8081/slow
+```
+
+После отправки спанов в Jaeger выбран сервис `api` и операция `GET /slow`. Поиск показал трейс с двумя спанами и длительностью около одной секунды:
+
+![Поиск трейса GET /slow в Jaeger](<images/Part3/10 Jaeger.png>)
+
+В водопаде видно, что `slow-op` вложен в серверный спан `GET /slow` и занимает почти всю его длительность. Это подтверждает, что основное время запроса ушло на искусственную задержку внутри обработчика.
+
+![Водопад GET /slow с вложенным slow-op](<images/Part3/11 Jaeger Waterfall.png>)
+
+## Ошибочный трейс и связь с логами
+
+Далее вызван `/fail`, который вернул ожидаемый HTTP 500:
+
+```bash
+curl --noproxy '*' -i http://localhost:8081/fail
+```
+
+В Grafana Explore выбран источник Loki и выполнен запрос:
+
+```logql
+{app="api"} | json | path="/fail"
+```
+
+В свежей записи присутствуют уровень `ERROR`, путь `/fail`, статус `500` и идентификаторы:
+
+```text
+trace_id: 426f0f7f9e629bb28032a4610abb180f
+span_id:  ce7f445e68397985
+```
+
+![JSON-лог ошибки с trace_id и span_id в Grafana](<images/Part3/12 grafana fail.png>)
+
+Значение `trace_id` из лога использовано для открытия того же запроса в Jaeger через поле поиска по ID или URL `/trace/<trace_id>`. В интерфейсе появился трейс `GET /fail` длительностью 256 мкс, с красной отметкой ошибки и HTTP-статусом 500:
+
+![Ошибочный трейс GET /fail в Jaeger](<images/Part3/13 jaeger fail.png>)
+
+В деталях спана видны `error=true`, событие `exception` и сообщение `intentional failure from /fail`. Идентификатор спана `ce7f445e68397985` совпадает с `span_id` из Loki:
+
+![Детали ошибочного спана и событие exception](<images/Part3/14 jaeger fail extended.png>)
+
+Таким образом, проверены вложенность медленной операции, пометка ошибочного запроса и переход от конкретной строки лога к соответствующему трейсу. Поиск по ID выполнялся вручную; автоматическая ссылка из Grafana в Jaeger не настраивалась.
+
+# Часть 4 — Алерты (Alertmanager + Karma)
+
+На текущем этапе Alertmanager установлен вместе с `kube-prometheus-stack`. Собственные три критичных правила алертинга, получатель уведомлений, Karma и проверка состояний `firing` пока не реализованы. Эта часть лабораторной остается следующей задачей.

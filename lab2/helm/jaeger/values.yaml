@@ -1,0 +1,13 @@
+image:
+  repository: jaegertracing/jaeger
+  tag: "2.22.0"
+
+storage:
+  maxTraces: 5000
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 512Mi

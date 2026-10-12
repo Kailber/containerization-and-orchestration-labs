@@ -1,6 +1,6 @@
 image:
   repository: lab2-api
-  tag: logs
+  tag: traces
   pullPolicy: Never
 
 service:
@@ -8,3 +8,7 @@ service:
   port: 8080
 
 replicaCount: 1
+
+tracing:
+  serviceName: api
+  endpoint: http://jaeger.lab2.svc.cluster.local:4318
