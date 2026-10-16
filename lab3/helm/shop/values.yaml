@@ -1,0 +1,39 @@
+database:
+  existingSecret: shop-db
+
+api:
+  replicas: 3
+
+  image:
+    repository: lab3-api
+    tag: v2
+    pullPolicy: Never
+
+  port: 8080
+  healthFail: false
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+worker:
+  replicas: 2
+
+  image:
+    repository: lab3-worker
+    tag: v1
+    pullPolicy: Never
+
+  port: 8082
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
