@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+
+metadata:
+  name: {{ .Release.Name }}-dashboard
+  labels:
+    grafana_dashboard: "1"
+
+data:
+  red.json: |
+{{ .Files.Get "dashboards/red.json" | indent 4 }}

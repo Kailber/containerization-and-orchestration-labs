@@ -1,0 +1,40 @@
+controller:
+  type: daemonset
+
+alloy:
+  extraEnv:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+
+  configMap:
+    content: |
+      discovery.kubernetes "api" {
+        role = "pod"
+
+        namespaces {
+          names = ["lab2"]
+        }
+
+        selectors {
+          role  = "pod"
+          label = "app=api"
+          field = "spec.nodeName=" + sys.env("NODE_NAME")
+        }
+      }
+
+      loki.source.kubernetes "api" {
+        targets    = discovery.kubernetes.api.targets
+        forward_to = [loki.write.local.receiver]
+      }
+
+      loki.write "local" {
+        external_labels = {
+          app = "api",
+        }
+
+        endpoint {
+          url = "http://loki-gateway.lab2.svc.cluster.local/loki/api/v1/push"
+        }
+      }
