@@ -1,0 +1,5 @@
+apiVersion: v2
+name: alerting
+description: Karma and a local Alertmanager webhook receiver for lab2
+type: application
+version: 0.1.0

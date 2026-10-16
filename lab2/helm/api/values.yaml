@@ -1,0 +1,23 @@
+image:
+  repository: lab2-api
+  tag: traces
+  pullPolicy: Never
+
+service:
+  type: ClusterIP
+  port: 8080
+
+replicaCount: 1
+
+tracing:
+  serviceName: api
+  endpoint: http://jaeger.lab2.svc.cluster.local:4318
+
+alerts:
+  enabled: true
+  # Учебные пороги: окно расчета и выдержка защищают от единичного всплеска.
+  window: 2m
+  for: 2m
+  errorRatio: 0.10
+  latencySeconds: 1
+  minRequestRate: 0.1

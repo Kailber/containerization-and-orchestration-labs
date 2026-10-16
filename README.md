@@ -28,6 +28,7 @@
 * Docker
 * Kubernetes
 * Git / GitHub
+* Go
 
 ## 📁 Структура проекта
 

@@ -1,0 +1,71 @@
+grafana:
+  enabled: true
+
+  persistence:
+    enabled: false
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  
+  additionalDataSources:
+    - name: loki
+      uid: loki
+      type: loki
+      access: proxy
+      url: http://loki-gateway.lab2.svc.cluster.local
+      editable: false
+
+prometheus:
+  prometheusSpec:
+    retention: 2d
+
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+
+    serviceMonitorSelector:
+      matchLabels:
+        release: monitoring
+
+    serviceMonitorNamespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: lab2
+
+alertmanager:
+  enabled: true
+
+  config:
+    global:
+      resolve_timeout: 1m
+    route:
+      receiver: "null"
+      group_by: [namespace, alertname, service]
+      group_wait: 10s
+      group_interval: 30s
+      repeat_interval: 5m
+      routes:
+        - receiver: lab2-webhook
+          matchers:
+            - 'app="api"'
+            - 'namespace="lab2"'
+    receivers:
+      - name: "null"
+      - name: lab2-webhook
+        webhook_configs:
+          - url: http://alerting-webhook.lab2.svc.cluster.local:8080/alerts
+            send_resolved: true
+
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 256Mi

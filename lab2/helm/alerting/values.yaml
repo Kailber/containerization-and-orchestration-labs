@@ -1,0 +1,18 @@
+karma:
+  image: ghcr.io/prymitive/karma:v0.133
+  alertmanagerURL: http://monitoring-kube-prometheus-alertmanager.lab2.svc.cluster.local:9093
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+webhook:
+  image: python:3.13-alpine
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 128Mi

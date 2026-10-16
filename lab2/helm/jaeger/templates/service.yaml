@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  selector:
+    app: jaeger
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: ui
+      port: 16686
+      targetPort: ui
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
