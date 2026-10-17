@@ -26,6 +26,10 @@ spec:
                 - kyverno
       validate:
         failureAction: Enforce
+        failureActionOverrides:
+          - action: Audit
+            namespaces:
+              - lab2
         message: "У Pod должна быть непустая метка app"
         pattern:
           metadata:

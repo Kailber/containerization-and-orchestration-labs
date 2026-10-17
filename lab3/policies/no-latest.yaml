@@ -26,6 +26,10 @@ spec:
                 - kyverno
       validate:
         failureAction: Enforce
+        failureActionOverrides:
+          - action: Audit
+            namespaces:
+              - lab2
         message: "Не указан явный тег образа, отличный от latest"
         foreach:
           - list: "request.object.spec.[containers, initContainers][]"

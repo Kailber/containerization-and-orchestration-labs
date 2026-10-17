@@ -26,6 +26,10 @@ spec:
                 - kyverno
       validate:
         failureAction: Enforce
+        failureActionOverrides:
+          - action: Audit
+            namespaces:
+              - lab2
         message: "У каждого контейнера должны быть лимиты CPU и памяти"
         pattern:
           spec:

@@ -1,5 +1,20 @@
 database:
-  existingSecret: shop-db
+  # Empty means the application Secret created by CloudNativePG.
+  existingSecret: ""
+  secretKey: uri
+
+postgres:
+  instances: 1
+  database: shop
+  owner: shop
+  storageSize: 1Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 
 api:
   replicas: 3

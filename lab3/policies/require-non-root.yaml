@@ -26,6 +26,10 @@ spec:
                 - kyverno
       validate:
         failureAction: Enforce
+        failureActionOverrides:
+          - action: Audit
+            namespaces:
+              - lab2
         message: "UID 0 запрещен. Pod должен использовать runAsNonRoot: true"
         pattern:
           spec:

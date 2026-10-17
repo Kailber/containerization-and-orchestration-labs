@@ -79,6 +79,8 @@ lab3/
 
 Все политики описаны объектами `ClusterPolicy`, из проверки исключены `kube-system`, `kube-public`, `kube-node-lease` и `kyverno`, чтобы ограничения не блокировали работу и восстановление системных компонентов.
 
+В общем Minikube-кластере для namespace `lab2` задано `failureActionOverrides: Audit`: существующий стек мониторинга не везде соответствует требованиям к лимитам, метке `app` и `runAsNonRoot`. Нарушения в `lab2` регистрируются без блокировки создания Pod. Для `lab3` и остальных неизъятых namespace действует `Enforce`. Это явное исключение из блокирующего режима для ранее установленного стека, а не подтверждение его соответствия политикам.
+
 | Политика | Проверка | Обоснование |
 | --- | --- | --- |
 | `require-limits` | У каждого контейнера указаны лимиты CPU и памяти | Ограничивает потребление ресурсов контейнером |
@@ -227,3 +229,51 @@ healthFail: true
 
 ![Увеличение количества replicas](images/part2/21-rollback.png)
 
+
+# Часть 3 — PostgreSQL через CloudNativePG
+
+Оператор CloudNativePG установлен отдельным Helm-релизом `cnpg` в namespace `cnpg-system`. После установки его Deployment готов, Pod работает, а CRD `clusters.postgresql.cnpg.io` зарегистрирован в Kubernetes API.
+
+![Установленный оператор CloudNativePG](images/part3/26-cnpg-operator.png)
+
+В чарт `shop` добавлен объект `Cluster` с одним экземпляром PostgreSQL, базой и владельцем `shop`, PVC на 1 GiB и лимитами ресурсов. Метка `app: postgres` передаётся дочерним ресурсам через `inheritedMetadata` для соответствия политикам Kyverno. Оператор создал Pod PostgreSQL, PVC, сервисы чтения/записи и Secret приложения.
+
+![Готовый кластер PostgreSQL](images/part3/27-postgres-ready.png)
+
+API и worker получают `DATABASE_URL` из ключа `uri` секрета `shop-postgres-app`, созданного оператором. Проверка показала HTTP 201 при создании заказа `cnpg-test` и последующее изменение `processed` на `true`.
+
+![Создание и обработка заказа через PostgreSQL](images/part3/29-order-cnpg.png)
+
+### Reconciliation PostgreSQL
+
+Pod `shop-postgres-1` был удалён вручную. CloudNativePG обнаружил расхождение с `spec.instances: 1` и создал Pod заново. Имя осталось прежним, но UID изменился с `2d3e3eb6-776c-4b0b-8f4e-42e6efcc5253` на `3d935e52-d172-4e98-a354-4146498586d9`, что подтверждает создание нового объекта, а не перезапуск старого контейнера.
+
+![Пересоздание Pod PostgreSQL](images/part3/30-postgres-recovery.png)
+
+PVC `shop-postgres-1` остался привязан к тому же PV. После восстановления запрос `/orders` вернул HTTP 200 и прежний заказ `cnpg-test` с `processed: true`, поэтому данные пережили замену Pod.
+
+![Сохранность данных после пересоздания Pod](images/part3/31-postgres-data-preserved.png)
+
+В объекте `Cluster` поле `spec` содержит желаемое состояние: число экземпляров, bootstrap базы, образ, ресурсы и размер хранилища. Поле `status` заполняется оператором и отражает наблюдаемое состояние: текущий primary, готовые экземпляры, здоровый PVC, фазу и условия готовности. После reconciliation в `status` указаны `readyInstances: 1` и `phase: Cluster in healthy state`.
+
+![Spec и status объекта Cluster](images/part3/32-cluster-spec-status.png)
+
+### Отличие оператора от controller-manager
+
+`kube-controller-manager` запускает встроенные контроллеры Kubernetes для универсальных ресурсов: Deployment, ReplicaSet, Node, Job и других. Он знает общие правила управления Kubernetes-объектами, но не понимает внутреннюю семантику PostgreSQL.
+
+CloudNativePG расширяет Kubernetes собственным CRD `Cluster` и отдельным контроллером. Его reconciliation включает предметную логику базы данных: bootstrap PostgreSQL, выбор primary, управление PVC, сервисами и сертификатами, безопасное завершение экземпляра и восстановление после сбоя. Оба компонента используют один control loop `desired state → observed state → action`, но оператор добавляет знание конкретного приложения поверх Kubernetes API.
+
+### Нехватка памяти при проверке восстановления
+
+Во время удаления Pod PostgreSQL возникли таймауты API Kubernetes и probes нескольких приложений. У контейнера Minikube был лимит 4 GiB; счётчики cgroup показали многочисленные достижения лимита и сильное давление на память (`memory.pressure full avg10` около 80%), без OOM-kill.
+
+Лимит существующего Docker-контейнера увеличен до 8 GiB RAM и 10 GiB суммарно RAM + swap:
+
+```bash
+docker update --memory=8g --memory-swap=10g minikube
+```
+
+Попытка изменить память через `minikube start --memory` была отклонена для существующего профиля. Прямой Docker-рестарт потребовал восстановления служб containerd/kubelet и штатной инициализации через `minikube start -p minikube`. После восстановления записи `control-plane.minikube.internal` был перезапущен kube-proxy, который до этого не мог подключиться к API и настроить сервисную сеть. Затем перезапущены Deployment API и worker.
+
+После восстановления подтверждены лимит 8 GiB, готовность API `3/3`, worker `2/2` и PostgreSQL `1/1`. Затем эксперимент с удалением Pod был выполнен повторно на стабильном кластере и завершился успешно, как показано выше. После последующих запусков Minikube фактический лимит следует проверять через `docker stats minikube --no-stream`.

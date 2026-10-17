@@ -25,6 +25,10 @@ spec:
                 - kyverno
       validate:
         failureAction: Enforce
+        failureActionOverrides:
+          - action: Audit
+            namespaces:
+              - lab2
         message: "Контейнеры не должны использовать privileged: true"
         pattern:
           spec:
