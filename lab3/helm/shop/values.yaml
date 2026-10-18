@@ -21,7 +21,7 @@ api:
 
   image:
     repository: lab3-api
-    tag: v2
+    tag: v3
     pullPolicy: Never
 
   port: 8080
@@ -40,7 +40,7 @@ worker:
 
   image:
     repository: lab3-worker
-    tag: v1
+    tag: v2
     pullPolicy: Never
 
   port: 8082
@@ -52,3 +52,12 @@ worker:
     limits:
       cpu: 200m
       memory: 128Mi
+
+monitoring:
+  namespace: lab2
+  releaseLabel: monitoring
+  interval: 15s
+  alerts:
+    for: 1m
+    apiMinReplicas: 3
+    workerMinReplicas: 2

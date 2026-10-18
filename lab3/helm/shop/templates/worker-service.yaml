@@ -5,6 +5,7 @@ metadata:
   labels:
     app: worker
     app.kubernetes.io/instance: {{ .Release.Name }}
+    monitoring: {{ .Release.Name }}
 spec:
   type: ClusterIP
   selector:

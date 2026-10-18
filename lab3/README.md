@@ -26,19 +26,26 @@ lab3/
 │       ├── privileged.yaml
 │       ├── root.yaml
 │       └── valid-pod.yaml
-│   helm/shop/
-│   ├── Chart.yaml
-│   ├── values.yaml
-│   └── templates/
-│       ├── api-deployment.yaml
-│       ├── api-service.yaml
-│       ├── worker-deployment.yaml
-│       └── worker-service.yaml
+├── helm/
+│   └── shop/
+│       ├── Chart.yaml
+│       ├── values.yaml
+│       └── templates/
+│           ├── api-deployment.yaml
+│           ├── api-service.yaml
+│           ├── grafana-dashboard.yaml
+│           ├── postgres-cluster.yaml
+│           ├── prometheus-rule.yaml
+│           ├── service-monitor.yaml
+│           ├── worker-deployment.yaml
+│           └── worker-service.yaml
 ├── images/
 │   ├── part0/
 │   ├── part1/
 │   ├── part2/
 │   ├── part3/
+│   ├── part4/
+│   └── part5/
 ```
 
 ---
@@ -60,7 +67,7 @@ lab3/
 
 ![Test 1](images/part0/1-test.png)
 
-После запуска worker y созданного заказа значение изменилось на `processed=true`. В логах worker появилась запись `order processed` с идентификатором и названием заказа:
+После запуска worker у созданного заказа значение изменилось на `processed=true`. В логах worker появилась запись `order processed` с идентификатором и названием заказа:
 
 ![Test 2](images/part0/2-test.png)
 
@@ -73,7 +80,7 @@ lab3/
 # Часть 1 — Ограждения на кластер
 
 ### Выбор движка
-На выбор были предоставлены 2 движка: Kyverno и OPA / Gatekeeper. В рамках данной лабораторной работы для проверки ресурсов был выбран Kyverno, который позволяет описывать политики в yaml без изучения отдельного языка Rego, используемого OPA/Gatekeeper. Он не потребляет много ресурсов, довольно простой, что идеально для енбольшого локального проекта. Конечно же, если бы речь шла не о лабораторной, а о полноценной корпоративной инфраструктуре, стоило бы задуматься о Gatekeeper :)
+На выбор были предоставлены 2 движка: Kyverno и OPA / Gatekeeper. В рамках данной лабораторной работы для проверки ресурсов был выбран Kyverno, который позволяет описывать политики в YAML без изучения отдельного языка Rego, используемого OPA/Gatekeeper. Он не потребляет много ресурсов и довольно прост, что подходит для небольшого локального проекта. Если бы речь шла не о лабораторной, а о полноценной корпоративной инфраструктуре, стоило бы отдельно сравнить оба варианта с учётом требований проекта.
 
 ### Реализованные правила
 
@@ -240,6 +247,10 @@ healthFail: true
 
 ![Готовый кластер PostgreSQL](images/part3/27-postgres-ready.png)
 
+После подключения секрета CloudNativePG Helm-релиз `shop` обновлён с параметрами по умолчанию. В результате готовы три реплики API, две реплики worker и один экземпляр PostgreSQL.
+
+![Готовый Helm-релиз shop с PostgreSQL](images/part3/28-shop-ready.png)
+
 API и worker получают `DATABASE_URL` из ключа `uri` секрета `shop-postgres-app`, созданного оператором. Проверка показала HTTP 201 при создании заказа `cnpg-test` и последующее изменение `processed` на `true`.
 
 ![Создание и обработка заказа через PostgreSQL](images/part3/29-order-cnpg.png)
@@ -262,7 +273,7 @@ PVC `shop-postgres-1` остался привязан к тому же PV. По�
 
 `kube-controller-manager` запускает встроенные контроллеры Kubernetes для универсальных ресурсов: Deployment, ReplicaSet, Node, Job и других. Он знает общие правила управления Kubernetes-объектами, но не понимает внутреннюю семантику PostgreSQL.
 
-CloudNativePG расширяет Kubernetes собственным CRD `Cluster` и отдельным контроллером. Его reconciliation включает предметную логику базы данных: bootstrap PostgreSQL, выбор primary, управление PVC, сервисами и сертификатами, безопасное завершение экземпляра и восстановление после сбоя. Оба компонента используют один control loop `desired state → observed state → action`, но оператор добавляет знание конкретного приложения поверх Kubernetes API.
+CloudNativePG расширяет Kubernetes собственным CRD `Cluster` и отдельным контроллером. Его reconciliation включает предметную логику базы данных: bootstrap PostgreSQL, выбор primary, управление PVC, сервисами и сертификатами, безопасное завершение экземпляра и восстановление после сбоя. Оба компонента используют один цикл `desired state -> observed state -> action`, но оператор добавляет знание конкретного приложения поверх Kubernetes API.
 
 ### Нехватка памяти при проверке восстановления
 
@@ -277,3 +288,57 @@ docker update --memory=8g --memory-swap=10g minikube
 Попытка изменить память через `minikube start --memory` была отклонена для существующего профиля. Прямой Docker-рестарт потребовал восстановления служб containerd/kubelet и штатной инициализации через `minikube start -p minikube`. После восстановления записи `control-plane.minikube.internal` был перезапущен kube-proxy, который до этого не мог подключиться к API и настроить сервисную сеть. Затем перезапущены Deployment API и worker.
 
 После восстановления подтверждены лимит 8 GiB, готовность API `3/3`, worker `2/2` и PostgreSQL `1/1`. Затем эксперимент с удалением Pod был выполнен повторно на стабильном кластере и завершился успешно, как показано выше. После последующих запусков Minikube фактический лимит следует проверять через `docker stats minikube --no-stream`.
+
+
+# Часть 4 — Падение control plane
+
+Перед экспериментом зафиксировано исходное состояние: Deployment API готов `3/3`, worker готов `2/2`, Pod PostgreSQL работает. Через ClusterIP из ноды Minikube успешно отвечали `/health` API и worker, а TCP-порт PostgreSQL 5432 был доступен.
+
+![Исходное состояние перед остановкой control plane](images/part4/33-control-plane-baseline.png)
+
+В Minikube API server работает как static Pod, поэтому kubelet автоматически запустил бы его заново после остановки контейнера. Для контролируемого эксперимента сначала был временно остановлен kubelet, затем отправлена команда остановки контейнера `kube-apiserver`. Вызов `crictl stop` завершился по таймауту, однако API server прекратил принимать соединения: попытка изменить число реплик API через `kubectl scale` получила `connection refused` и не записала новое желаемое состояние.
+
+При недоступном API server уже запущенные workload-контейнеры продолжили выполняться под управлением containerd, а существующие правила kube-proxy продолжили маршрутизировать трафик Service. Поэтому API вернул `ok`, `/orders` вернул сохранённый заказ, worker вернул `ok`, а TCP-порт PostgreSQL остался доступен. Control plane был недоступен для чтения и изменений, но существующий dataplane продолжил работу.
+
+![Приложение работает при недоступном API server](images/part4/34-control-plane-down.png)
+
+Для восстановления был снова запущен kubelet. Он пересоздал static Pod `kube-apiserver`: номер попытки контейнера изменился с `4` на `5`. После прохождения `/readyz` управление кластером восстановилось. Deployment API остался в состоянии `3/3`, что подтверждает: неудачная команда `scale --replicas=4` не была сохранена. Worker вернулся в состояние `2/2`, а объект PostgreSQL — `Cluster in healthy state` с одним готовым экземпляром.
+
+![Восстановление control plane](images/part4/35-control-plane-restored.png)
+
+Эксперимент показывает разделение control plane и dataplane. API server нужен для принятия и сохранения нового желаемого состояния, а уже запущенным процессам приложения он не требуется для обработки запросов. При этом без control plane не выполняются новые изменения и reconciliation, требующий обращения контроллеров к Kubernetes API. В данном однодовом Minikube kubelet был остановлен только для предотвращения немедленного перезапуска static Pod API server; containerd и workload-контейнеры продолжали работать.
+
+
+# Часть 5 — Мониторинг
+
+Использован существующий стек `kube-prometheus-stack` из Лабы 2. Новый Prometheus и Grafana не устанавливались. В API и worker добавлен endpoint `/metrics` в формате Prometheus. API публикует состояние здоровья и число созданных заказов, worker — число обработанных заказов; оба сервиса публикуют информационную метрику `shop_service_info`.
+
+В чарт добавлены `ServiceMonitor`, `PrometheusRule` и ConfigMap дашборда Grafana. Prometheus из Лабы 2 настроен выбирать `ServiceMonitor` только из namespace `lab2`, поэтому объект создаётся там, а через `namespaceSelector` выбирает сервисы в `lab3`. `PrometheusRule` создаётся в `lab3` с меткой `release: monitoring`, которую использует существующий Prometheus.
+
+После обновления чарта готовы три реплики API и две реплики worker, оба endpoint `/metrics` отвечают, а объекты мониторинга созданы.
+
+![Ресурсы мониторинга и метрики shop](images/part5/36-monitoring-resources-metrics.png)
+
+Grafana sidecar загружает dashboard ConfigMap по метке `grafana_dashboard: "1"`. Дашборд показывает количество доступных scrape targets, готовые реплики API и worker, готовность PostgreSQL, а также счётчики созданных и обработанных заказов.
+
+![Дашборд shop в Grafana](images/part5/37-shop-dashboard.png)
+
+Prometheus обнаружил пять целей через `ServiceMonitor`: три Pod API и два Pod worker. Все цели находятся в состоянии `UP`.
+
+![Targets shop в Prometheus](images/part5/38-prometheus-targets.png)
+
+### Алерты
+
+В `PrometheusRule` описаны три правила с выдержкой `for: 1m`, которая отсекает краткие переходные состояния при обычном rollout:
+
+| Алерт | Условие | Обоснование |
+| --- | --- | --- |
+| `ShopApiInsufficientReplicas` | Готовых реплик API меньше 3 | Потеря реплик уменьшает запас доступности и нарушает рассчитанную ёмкость API; критичность `critical` |
+| `ShopWorkerInsufficientReplicas` | Готовых реплик worker меньше 2 | Один worker убирает резервирование обработки заказов и снижает пропускную способность; критичность `warning` |
+| `ShopPostgresUnavailable` | Нет ни одного готового Pod PostgreSQL | Без primary недоступны создание, чтение и обработка заказов; критичность `critical` |
+
+Для проверки число реплик worker временно уменьшено с двух до одной через Helm. После обновления метрики и выдержки правила `ShopWorkerInsufficientReplicas` перешёл в состояние `FIRING`, а два остальных правила остались неактивны.
+
+![Алерт worker в состоянии firing](images/part5/39-alert-firing.png)
+
+После проверки чарт установлен повторно с параметрами по умолчанию, worker восстановлен до `2/2`. Тестовый алерт разрешается после следующего scrape и цикла вычисления правил.

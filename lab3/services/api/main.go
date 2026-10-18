@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -23,6 +25,8 @@ type Order struct {
 type App struct {
 	db *sql.DB
 }
+
+var ordersCreated atomic.Uint64
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -46,6 +50,29 @@ func (app *App) health(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Write([]byte("ok\n"))
+}
+
+func metrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	health := 1
+	if strings.EqualFold(os.Getenv("HEALTH_FAIL"), "true") {
+		health = 0
+	}
+
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	fmt.Fprintln(w, "# HELP shop_service_info Static information about the shop service.")
+	fmt.Fprintln(w, "# TYPE shop_service_info gauge")
+	fmt.Fprintln(w, `shop_service_info{service="api"} 1`)
+	fmt.Fprintln(w, "# HELP shop_health_status Whether the service reports itself healthy.")
+	fmt.Fprintln(w, "# TYPE shop_health_status gauge")
+	fmt.Fprintf(w, "shop_health_status{service=\"api\"} %d\n", health)
+	fmt.Fprintln(w, "# HELP shop_orders_created_total Number of orders created by this API process.")
+	fmt.Fprintln(w, "# TYPE shop_orders_created_total counter")
+	fmt.Fprintf(w, "shop_orders_created_total{service=\"api\"} %d\n", ordersCreated.Load())
 }
 
 func (app *App) createOrder(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +121,7 @@ func (app *App) createOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ordersCreated.Add(1)
 	log.Printf("order created: id=%d", order.ID)
 	writeJSON(w, http.StatusCreated, order)
 }
@@ -180,6 +208,7 @@ func run() error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", app.health)
+	mux.HandleFunc("/metrics", metrics)
 	mux.HandleFunc("/order", app.createOrder)
 	mux.HandleFunc("/orders", app.listOrders)
 
