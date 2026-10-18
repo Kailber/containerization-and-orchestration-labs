@@ -1,0 +1,37 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-app-label
+  annotations:
+    policies.kyverno.io/title: "Обязательная метка приложения"
+    policies.kyverno.io/description: >-
+      Требует непустую метку app у каждого Pod, которая позволяет 
+      определить принадлежность Pod к приложению
+spec:
+  background: true
+  rules:
+    - name: check-app-label
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kube-public
+                - kube-node-lease
+                - kyverno
+      validate:
+        failureAction: Enforce
+        failureActionOverrides:
+          - action: Audit
+            namespaces:
+              - lab2
+        message: "У Pod должна быть непустая метка app"
+        pattern:
+          metadata:
+            labels:
+              app: "?*"

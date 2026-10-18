@@ -1,0 +1,63 @@
+database:
+  # Empty means the application Secret created by CloudNativePG.
+  existingSecret: ""
+  secretKey: uri
+
+postgres:
+  instances: 1
+  database: shop
+  owner: shop
+  storageSize: 1Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+api:
+  replicas: 3
+
+  image:
+    repository: lab3-api
+    tag: v3
+    pullPolicy: Never
+
+  port: 8080
+  healthFail: false
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+worker:
+  replicas: 2
+
+  image:
+    repository: lab3-worker
+    tag: v2
+    pullPolicy: Never
+
+  port: 8082
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+monitoring:
+  namespace: lab2
+  releaseLabel: monitoring
+  interval: 15s
+  alerts:
+    for: 1m
+    apiMinReplicas: 3
+    workerMinReplicas: 2
