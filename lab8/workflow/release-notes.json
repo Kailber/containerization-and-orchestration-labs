@@ -1,0 +1,584 @@
+{
+  "name": "Kebabernetes Release Notes Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 12
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d850757d-7925-434d-8585-ba4f22b816fe",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5337f76d-542d-4a3f-b865-b817cbabff84",
+              "name": "owner",
+              "value": "Kailber",
+              "type": "string"
+            },
+            {
+              "id": "633b88fe-518f-4626-8af6-fef84fd4eae9",
+              "name": "repo",
+              "value": "kebabernetes-frontend",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "3f6b1720-a54e-47c1-b99d-1b71c374e4ab",
+      "name": "Repository Config"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/tags?per_page=100",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "4803cf1c-ec6d-460b-97ca-b0dec0379f11",
+      "name": "Get Tags",
+      "credentials": {
+        "githubApi": {
+          "id": "NQZvXqZ8mkpIXOhZ",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const tags = $input.all()\n  .map(item => item.json)\n  .flatMap(item => Array.isArray(item) ? item : [item])\n  .sort((a, b) => b.name.localeCompare(a.name, undefined, {\n    numeric: true,\n  }));\n\nif (tags.length < 2) {\n  throw new Error('Нужно как минимум два тега для сравнения');\n}\n\nreturn [\n  {\n    json: {\n      owner: $('Repository Config').first().json.owner,\n      repo: $('Repository Config').first().json.repo,\n      newTag: tags[0].name,\n      prevTag: tags[1].name,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "6f6f65ff-cac0-48f5-b8b9-421b0dfbb144",
+      "name": "Select Tags"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/releases?per_page=100",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        896,
+        0
+      ],
+      "id": "f382bb4b-5338-4fd3-991c-03da8d8871a1",
+      "name": "Get Releases",
+      "credentials": {
+        "githubApi": {
+          "id": "NQZvXqZ8mkpIXOhZ",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9b890769-b582-48d1-82b2-44f900290a9c",
+              "leftValue": "={{ $json.releaseExists }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        0
+      ],
+      "id": "8cdfc2d2-0556-4a14-b38b-11bf3e8805af",
+      "name": "Release Exists?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Select Tags').first().json;\nconst releases = $input.all().map(item => item.json);\n\nconst exists = releases.some(\n  release => release.tag_name === config.newTag\n);\n\nreturn [{\n  json: {\n    ...config,\n    releaseExists: exists,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "a761f16d-6f7d-4e06-9657-e347a9bb9e99",
+      "name": "Check Release"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/compare/{{ $json.prevTag }}...{{ $json.newTag }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1568,
+        96
+      ],
+      "id": "4a26e3f1-17fa-4fc9-870c-c961cbf1b9e2",
+      "name": "Compare Tags",
+      "credentials": {
+        "githubApi": {
+          "id": "NQZvXqZ8mkpIXOhZ",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const comparison = $input.first().json;\n\nconst prNumbers = [\n  ...new Set(\n    comparison.commits.flatMap(commit => {\n      const message = commit.commit.message;\n      return [...message.matchAll(/\\(#(\\d+)\\)/g)]\n        .map(match => Number(match[1]));\n    })\n  ),\n].sort((a, b) => a - b);\n\nreturn [\n  {\n    json: {\n      owner: $('Select Tags').first().json.owner,\n      repo: $('Select Tags').first().json.repo,\n      prevTag: $('Select Tags').first().json.prevTag,\n      newTag: $('Select Tags').first().json.newTag,\n      prNumbers,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        96
+      ],
+      "id": "ca3df38b-4abd-4001-ba1d-1754181a0da1",
+      "name": "Extract PR Numbers"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json) }}",
+        "options": {
+          "systemMessage": "Ты — AI-агент команды проекта «Кебабернетес», готовящий release notes на русском языке.\n\nПеред обработкой входных данных вызови Filesystem MCP `read_multiple_files` **один раз**, передав пути:\n\n- `skills/release-notes.md`\n- `business-context.md`\n- `release-rules.md`\n\nИспользуй содержимое всех трёх файлов как единый контекст. Не вызывай отдельные инструменты чтения для этих файлов без необходимости. Если чтение не удалось или какой-либо файл отсутствует в результате, не выдумывай его содержимое.\n\nСледуй инструкциям `skills/release-notes.md`. Обработай каждый PR из переданного списка.\n\nВерни только готовый текст release notes на русском языке в формате, указанном в skill.",
+          "maxIterations": 25
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        2016,
+        96
+      ],
+      "id": "e7a71b69-4590-48de-ad8c-e1d1e654f7ae",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "nvidia/nemotron-3-super-120b-a12b:free",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1888,
+        304
+      ],
+      "id": "cd462fa4-9789-4863-9d9f-951543f0c102",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "tUt1b3kUrzKixKph",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://api.githubcopilot.com/mcp/x/pull_requests/readonly",
+        "serverTransport": "={{ \"httpStreamable\" }}",
+        "authentication": "bearerAuth",
+        "include": "selected",
+        "includeTools": [
+          "pull_request_read"
+        ],
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.4,
+      "position": [
+        2032,
+        304
+      ],
+      "id": "07742b1c-76dd-4470-8419-ff46ce3cfe46",
+      "name": "GitHub PR Read",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "95Q3BvO2mJ7vKeVA",
+          "name": "Bearer Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "http://fs-mcp:8000/mcp",
+        "include": "selected",
+        "includeTools": [
+          "list_directory",
+          "read_multiple_files"
+        ],
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.4,
+      "position": [
+        2288,
+        304
+      ],
+      "id": "387712cd-b1a7-40f7-bfa3-f39515f9bad1",
+      "name": "FileSystem"
+    },
+    {
+      "parameters": {
+        "resource": "release",
+        "owner": {
+          "__rl": true,
+          "mode": "name",
+          "value": "={{ $('Repository Config').item.json.owner }}"
+        },
+        "repository": {
+          "__rl": true,
+          "mode": "name",
+          "value": "={{ $('Repository Config').item.json.repo }}"
+        },
+        "releaseTag": "={{ $('Select Tags').item.json.newTag }}",
+        "additionalFields": {
+          "name": "={{ 'Кебабернетес — релиз ' + $('Select Tags').item.json.newTag }}",
+          "body": "={{ $json.output }}",
+          "draft": true
+        }
+      },
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        2608,
+        64
+      ],
+      "id": "8a6c03a3-422f-4b27-932d-171ebdcdf55f",
+      "name": "Create a release",
+      "webhookId": "cc198c87-446f-4172-b163-1c397f84cac0",
+      "credentials": {
+        "githubApi": {
+          "id": "NQZvXqZ8mkpIXOhZ",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ 'Ответ агента не прошёл проверку для ' + $('Select Tags').item.json.newTag }}"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        2608,
+        256
+      ],
+      "id": "753b757a-f71e-4371-ac24-249639c2eedb",
+      "name": "Reject Agent Output"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ab021e97-015c-45f3-8848-09f12d919d90",
+              "leftValue": "={{ $json.output }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "9daa3a55-e80a-46a3-981c-ddccf748acae",
+              "leftValue": "={{ !$json.output.trim().startsWith('```') && !$json.output.includes('Agent stopped') }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "94e0e6b0-13ed-49fa-a5d2-3e31ee97a578",
+              "leftValue": "={{ $json.output.includes('### ') }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "7b001a8c-c6c0-4cca-9ae1-83d29f860295",
+              "leftValue": "={{ $('Extract PR Numbers').item.json.prNumbers.every(n => new RegExp('(?:#|PR\\\\s*)' + n + '(?!\\\\d)', 'i').test($json.output)) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2384,
+        160
+      ],
+      "id": "2806f12a-e669-43a1-892e-9519a967191c",
+      "name": "Validate Agent Output"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Repository Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Repository Config": {
+      "main": [
+        [
+          {
+            "node": "Get Tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tags": {
+      "main": [
+        [
+          {
+            "node": "Select Tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Tags": {
+      "main": [
+        [
+          {
+            "node": "Get Releases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Releases": {
+      "main": [
+        [
+          {
+            "node": "Check Release",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Release": {
+      "main": [
+        [
+          {
+            "node": "Release Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Release Exists?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Compare Tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Tags": {
+      "main": [
+        [
+          {
+            "node": "Extract PR Numbers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PR Numbers": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub PR Read": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FileSystem": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Validate Agent Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Agent Output": {
+      "main": [
+        [
+          {
+            "node": "Create a release",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Agent Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "2e12079a-f7e0-4fe9-ae6e-cb60c20bc873",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "FDRNwTr5C34My34F",
+  "tags": []
+}
