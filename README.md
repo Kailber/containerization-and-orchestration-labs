@@ -20,7 +20,7 @@
 | 04 | SLA критического пути под перегрузкой              | 🟡 In progress |
 | 05 | Zero-trust сеть с доказательством                  | ⚪ Not started |
 | 06 | Автопилот релиза: катит хорошее, откатывает плохое | 🐸 Frog Skip   |
-| 08 | Автоматизация devops-процесса с n8n + AI           | 🟡 In progress |
+| 08 | Автоматизация devops-процесса с n8n + AI           | 🟢 Done        |
 
 ### Статусы
 
@@ -45,6 +45,8 @@
 ├── lab3/
 ├── lab4/
 ├── lab5/
+├── lab6/
+├── lab8/
 └── README.md
 ```
 
@@ -69,7 +71,7 @@ git pull
 
 ```bash
 git add .
-git commit -m "lab01: add Dockerfile"
+git commit -m "lab1: add Dockerfile"
 git push
 ```
 
@@ -98,11 +100,11 @@ git checkout -b lab1
 Рекомендуемый формат:
 
 ```text
-lab01: add Dockerfile
-lab01: configure container networking
-lab02: add docker compose
-lab03: fix healthcheck
-lab04: add Kubernetes deployment
+lab1: add Dockerfile
+lab1: configure container networking
+lab2: add docker compose
+lab3: fix healthcheck
+lab4: add Kubernetes deployment
 ```
 
 ## 🔀 Pull Requests
