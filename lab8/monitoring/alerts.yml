@@ -1,0 +1,28 @@
+groups:
+  - name: release-notes
+    rules:
+      - alert: N8nDown
+        expr: up{job="n8n"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "n8n недоступен"
+          description: "Prometheus не может получить метрики n8n дольше минуты. Запуск по расписанию не состоится. Проверь docker compose ps и логи n8n."
+
+      - alert: ReleaseNotesLastRunFailed
+        expr: release_notes_last_execution_result{result=~"rejected|failed_.*"} == 1
+        labels:
+          severity: warning
+        annotations:
+          summary: "Последний запуск release notes неудачен: {{ $labels.result }}"
+          description: "Черновик релиза не создан. failed_github — сеть или токен GitHub; failed_ai — лимит или ключ OpenRouter; rejected — ответ агента не прошёл проверку. Разбери execution в n8n и перезапусти workflow вручную."
+
+      - alert: ReleaseNotesNoSuccess
+        expr: time() - release_notes_last_success_timestamp_seconds > 26 * 3600
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Больше 26 часов нет успешного запуска release notes"
+          description: "С последнего успешного запуска прошло {{ $value | humanizeDuration }}. Workflow запускается раз в сутки — день пропущен. Если release_notes_source_up = 0, проблема в доступе экспортера к API n8n, а не в самом workflow."

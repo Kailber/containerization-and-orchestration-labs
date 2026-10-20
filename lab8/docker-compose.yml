@@ -1,0 +1,84 @@
+
+services:
+  n8n:
+    image: n8nio/n8n:2.43.7
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY in .env}
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-Europe/Moscow}
+      TZ: ${TZ:-Europe/Moscow}
+      N8N_METRICS: "true"
+      N8N_METRICS_INCLUDE_MESSAGE_EVENT_BUS_METRICS: "true"
+      N8N_METRICS_INCLUDE_WORKFLOW_ID_LABEL: "true"
+      N8N_METRICS_INCLUDE_WORKFLOW_NAME_LABEL: "true"
+      N8N_METRICS_INCLUDE_WORKFLOW_STATISTICS: "true"
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+  fs-mcp:
+    build: ./fs-mcp
+    restart: unless-stopped
+    volumes:
+      - ./team-docs:/docs:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+  
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.6
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    command:
+      - --docker_only=true
+      - --store_container_labels=false
+      - --whitelisted_container_labels=com.docker.compose.service
+      - --housekeeping_interval=15s
+      - --enable_metrics=cpu,memory,oom_event
+
+  release-notes-exporter:
+    build: ./release-notes-exporter
+    restart: unless-stopped
+    environment:
+      N8N_API_KEY: ${N8N_API_KEY:?Set N8N_API_KEY in .env}
+      N8N_WORKFLOW_ID: ${N8N_WORKFLOW_ID:?Set N8N_WORKFLOW_ID in .env}
+
+  grafana:
+    image: grafana/grafana:13.2.4
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+
+
+volumes:
+  n8n_data:
+  prometheus_data:
+  grafana_data:
