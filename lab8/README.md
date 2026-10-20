@@ -2,6 +2,51 @@
 
 Автоматизация, которая каждый день готовит черновик release notes для фронтенда сервиса доставки еды. Обычные шаги n8n находят новый релиз и список PR, AI-агент через два MCP-сервера читает PR и документы команды и пишет текст, n8n создаёт черновик GitHub Release. Всё работает локально в Docker Compose и обвешано мониторингом.
 
+## Структура проекта
+
+```text
+lab8/
+├── README.md
+├── lab.md                                  задание лабы
+├── docker-compose.yml                      весь стек
+├── .env.example                            шаблон секретов (.env не коммитится)
+├── .gitignore
+├── workflow/
+│   └── release-notes.json                  экспорт workflow n8n
+├── team-docs/                              документы команды, монтируются в fs-mcp
+│   ├── business-context.md
+│   ├── release-rules.md
+│   └── skills/
+│       └── release-notes.md                skill агента
+├── fs-mcp/
+│   └── Dockerfile                          Filesystem MCP за supergateway
+├── mock-repo/
+│   └── seed.py                             генератор тестового репозитория
+├── release-notes-exporter/                 экспортер бизнес-метрик
+│   ├── Dockerfile
+│   └── exporter.py
+├── monitoring/
+│   ├── prometheus.yml
+│   ├── alerts.yml                          три алерта
+│   └── grafana/
+│       ├── provisioning/
+│       │   ├── datasources/
+│       │   │   └── datasources.yml
+│       │   └── dashboards/
+│       │       └── dashboards.yml
+│       └── dashboards/
+│           └── release-notes.json          дашборд
+└── images/
+    ├── 01-dashboard-incident.png
+    ├── 02-dashboard-after-fix.png
+    ├── 03-alert-n8n-down.png
+    ├── 04-workflow-execution.png
+    ├── 05-agent-tool-calls.png
+    └── 06-github-draft-release.png
+```
+
+---
+
 ## 1. Кейс
 
 **Кебабернетес** — приложение доставки еды крупной продуктовой компании. Веб-фронтендом занимается команда из 8 разработчиков, новая версия выкатывается в прод каждое утро.
@@ -188,21 +233,6 @@ System message:
 | grafana | `grafana/grafana:13.2.4` | Дашборд |
 
 Версии образов и пакетов зафиксированы: с `latest` поведение могло бы поменяться без изменений в репозитории. Пакеты MCP-моста ставятся при сборке образа, а не через `npx` при старте.
-
-```text
-lab8/
-├── lab.md                              задание лабы
-├── docker-compose.yml, .env.example
-├── workflow/release-notes.json         экспорт workflow
-├── team-docs/                          документы команды и skill (монтируются в fs-mcp)
-├── fs-mcp/                             образ Filesystem MCP за supergateway
-├── mock-repo/seed.py                   генератор тестового репозитория
-├── release-notes-exporter/             экспортер бизнес-метрик
-├── monitoring/
-│   ├── prometheus.yml, alerts.yml
-│   └── grafana/                        provisioning источника данных и дашборд
-└── images/                             скриншоты
-```
 
 ## 6. Мониторинг
 
