@@ -1,0 +1,48 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-non-root
+  annotations:
+    policies.kyverno.io/title: "Запуск контейнеров без root"
+    policies.kyverno.io/description: >-
+      Требует runAsNonRoot на уровне Pod, запрещает контейнерам 
+      отключать эту настройку или использовать UID 0
+spec:
+  background: true
+  rules:
+    - name: check-non-root
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kube-public
+                - kube-node-lease
+                - kyverno
+      validate:
+        failureAction: Enforce
+        failureActionOverrides:
+          - action: Audit
+            namespaces:
+              - lab2
+        message: "UID 0 запрещен. Pod должен использовать runAsNonRoot: true"
+        pattern:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+              =(runAsUser): ">0"
+            containers:
+              - name: "*"
+                =(securityContext):
+                  =(runAsNonRoot): true
+                  =(runAsUser): ">0"
+            =(initContainers):
+              - name: "*"
+                =(securityContext):
+                  =(runAsNonRoot): true
+                  =(runAsUser): ">0"

@@ -1,0 +1,44 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: no-latest
+  annotations:
+    policies.kyverno.io/title: "Обязательный тег версии образа"
+    policies.kyverno.io/description: >-
+      Требует явный тег образа, отличный от latest, чтобы 
+      явно указывать используемую версию приложения
+spec:
+  background: true
+  rules:
+    - name: check-image-version
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kube-public
+                - kube-node-lease
+                - kyverno
+      validate:
+        failureAction: Enforce
+        failureActionOverrides:
+          - action: Audit
+            namespaces:
+              - lab2
+        message: "Не указан явный тег образа, отличный от latest"
+        foreach:
+          - list: "request.object.spec.[containers, initContainers][]"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ regex_match('(^|/)[^/:@]+:[^/:@]+$', element.image) }}"
+                    operator: Equals
+                    value: false
+                  - key: "{{ regex_match(':latest$', element.image) }}"
+                    operator: Equals
+                    value: true

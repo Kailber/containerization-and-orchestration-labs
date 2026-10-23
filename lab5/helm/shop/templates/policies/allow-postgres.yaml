@@ -1,0 +1,45 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: shop-postgres
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: {{ index .Values.networkPolicy.postgres.labels "cnpg.io/cluster" | quote }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: {{ .Values.networkPolicy.api.labels.app }}
+        - podSelector:
+            matchLabels:
+              app: {{ .Values.networkPolicy.worker.labels.app }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.postgres.port }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.cnpg.namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.postgres.monitorPort }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoring.namespace }}
+      ports:
+        - protocol: TCP
+          port: 9187
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.43.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+{{- end }}

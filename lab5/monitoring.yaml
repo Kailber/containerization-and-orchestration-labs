@@ -1,0 +1,17 @@
+grafana:
+  additionalDataSources: []
+
+prometheus:
+  prometheusSpec:
+    scrapeInterval: 5s
+    evaluationInterval: 5s
+
+alertmanager:
+  config:
+    global:
+      resolve_timeout: 1m
+    route:
+      receiver: "null"
+    receivers:
+      - name: "null"
+      

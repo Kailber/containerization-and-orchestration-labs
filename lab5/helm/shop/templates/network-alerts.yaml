@@ -1,0 +1,36 @@
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: shop-network-alerts
+  namespace: lab2
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: network-alerts
+      rules:
+        - alert: NetworkPolicyDrops
+          expr: sum(rate(hubble_drop_total[2m])) > 0
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Обнаружен заблокированный сетевой трафик"
+
+        - alert: DNSErrors
+          expr: sum(rate(coredns_dns_responses_total{rcode="SERVFAIL"}[5m])) > 0
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Обнаружены ошибки DNS"
+
+        - alert: TCPConnectionDrops
+          expr: sum(rate(hubble_tcp_flags_total{flag="RST"}[2m])) > 0
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Обнаружены TCP-сбросы соединений"
+{{- end }}
