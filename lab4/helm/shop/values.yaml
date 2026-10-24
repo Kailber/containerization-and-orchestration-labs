@@ -119,4 +119,4 @@ monitoring:
   alerts:
     for: 1m
     apiMinReplicas: 3
-    workerMinReplicas: 2
+    batchMinReplicas: 1

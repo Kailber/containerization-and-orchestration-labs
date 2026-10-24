@@ -7,78 +7,416 @@ metadata:
     app: {{ .Release.Name }}
     grafana_dashboard: "1"
 data:
-  shop.json: |-
+  shop-lab4.json: |-
     {
-      "annotations": {"list": []},
+      "annotations": {
+        "list": []
+      },
       "editable": true,
       "panels": [
         {
-          "datasource": "prometheus",
-          "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
-          "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
           "id": 1,
-          "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "textMode": "auto"},
-          "targets": [{"expr": "sum(up{namespace=\"{{ .Release.Namespace }}\", service=~\"{{ .Release.Name }}-(api|worker)\"})", "refId": "A"}],
-          "title": "Scrape targets up",
-          "type": "stat"
+          "title": "API: available replicas",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 6,
+            "h": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "expr": "kube_deployment_status_replicas_available{namespace=\"{{ .Release.Namespace }}\",deployment=\"{{ .Release.Name }}-api\"}",
+              "refId": "A",
+              "legendFormat": "API: available replicas"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
         },
         {
-          "datasource": "prometheus",
-          "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
-          "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
           "id": 2,
-          "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "textMode": "auto"},
-          "targets": [{"expr": "kube_deployment_status_replicas_available{namespace=\"{{ .Release.Namespace }}\", deployment=\"{{ .Release.Name }}-api\"}", "refId": "A"}],
-          "title": "API available replicas",
-          "type": "stat"
+          "title": "PostgreSQL: ready instances",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 6,
+            "y": 0,
+            "w": 6,
+            "h": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "expr": "sum(kube_pod_status_ready{namespace=\"{{ .Release.Namespace }}\",pod=~\"{{ .Release.Name }}-postgres-[0-9]+\",condition=\"true\"}) or vector(0)",
+              "refId": "A",
+              "legendFormat": "PostgreSQL: ready instances"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
         },
         {
-          "datasource": "prometheus",
-          "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
-          "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0},
           "id": 3,
-          "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "textMode": "auto"},
-          "targets": [{"expr": "kube_deployment_status_replicas_available{namespace=\"{{ .Release.Namespace }}\", deployment=\"{{ .Release.Name }}-worker\"}", "refId": "A"}],
-          "title": "Worker available replicas",
-          "type": "stat"
+          "title": "Batch: available replicas",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 0,
+            "w": 6,
+            "h": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "expr": "kube_deployment_status_replicas_available{namespace=\"{{ .Release.Namespace }}\",deployment=\"{{ .Release.Name }}-batch\"}",
+              "refId": "A",
+              "legendFormat": "Batch: available replicas"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
         },
         {
-          "datasource": "prometheus",
-          "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
-          "gridPos": {"h": 6, "w": 6, "x": 18, "y": 0},
           "id": 4,
-          "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "textMode": "auto"},
-          "targets": [{"expr": "sum(kube_pod_status_ready{namespace=\"{{ .Release.Namespace }}\", pod=~\"{{ .Release.Name }}-postgres-[0-9]+\", condition=\"true\"})", "refId": "A"}],
-          "title": "PostgreSQL ready instances",
-          "type": "stat"
+          "title": "Batch: Evicted Pods",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 18,
+            "y": 0,
+            "w": 6,
+            "h": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "expr": "sum(kube_pod_status_reason{namespace=\"{{ .Release.Namespace }}\",pod=~\"{{ .Release.Name }}-batch-.*\",reason=\"Evicted\"}) or vector(0)",
+              "refId": "A",
+              "legendFormat": "Batch: Evicted Pods"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
         },
         {
-          "datasource": "prometheus",
-          "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
-          "gridPos": {"h": 9, "w": 12, "x": 0, "y": 6},
           "id": 5,
-          "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "single", "sort": "none"}},
-          "targets": [{"expr": "sum(shop_orders_created_total)", "legendFormat": "created", "refId": "A"}],
-          "title": "Orders created by running API processes",
-          "type": "timeseries"
+          "title": "Orders created per second",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 6,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(shop_orders_created_total{namespace=\"{{ .Release.Namespace }}\"}[1m]))",
+              "refId": "A",
+              "legendFormat": "Orders created per second"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
         },
         {
-          "datasource": "prometheus",
-          "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
-          "gridPos": {"h": 9, "w": 12, "x": 12, "y": 6},
           "id": 6,
-          "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "single", "sort": "none"}},
-          "targets": [{"expr": "sum(shop_orders_processed_total)", "legendFormat": "processed", "refId": "A"}],
-          "title": "Orders processed by running worker processes",
-          "type": "timeseries"
+          "title": "Orders processed per second",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 6,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(shop_orders_processed_total{namespace=\"{{ .Release.Namespace }}\"}[1m]))",
+              "refId": "A",
+              "legendFormat": "Orders processed per second"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "id": 7,
+          "title": "Working set: shop containers",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 14,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "expr": "container_memory_working_set_bytes{namespace=\"{{ .Release.Namespace }}\",container=~\"api|worker|postgres|batch\",image!=\"\"}",
+              "refId": "A",
+              "legendFormat": "{{ "{{pod}}" }} / {{ "{{container}}" }}"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "id": 8,
+          "title": "CPU throttled periods: critical path",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 14,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "expr": "100 * rate(container_cpu_cfs_throttled_periods_total{namespace=\"{{ .Release.Namespace }}\",container=~\"api|postgres\",image!=\"\"}[1m]) / clamp_min(rate(container_cpu_cfs_periods_total{namespace=\"{{ .Release.Namespace }}\",container=~\"api|postgres\",image!=\"\"}[1m]), 0.001)",
+              "refId": "A",
+              "legendFormat": "{{ "{{pod}}" }} / {{ "{{container}}" }}"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "id": 9,
+          "title": "Node MemoryPressure (1 = pressure)",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 22,
+            "w": 12,
+            "h": 7
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "expr": "kube_node_status_condition{node=~\"lab4-.*\",condition=\"MemoryPressure\",status=\"true\"}",
+              "refId": "A",
+              "legendFormat": "{{ "{{node}}" }}"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "id": 10,
+          "title": "Batch Pending Pods",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 22,
+            "w": 12,
+            "h": 7
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "expr": "sum(kube_pod_status_phase{namespace=\"{{ .Release.Namespace }}\",pod=~\"{{ .Release.Name }}-batch-.*\",phase=\"Pending\"}) or vector(0)",
+              "refId": "A",
+              "legendFormat": "Batch Pending Pods"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
         }
       ],
       "refresh": "10s",
       "schemaVersion": 39,
-      "tags": ["shop", "lab3"],
-      "time": {"from": "now-15m", "to": "now"},
+      "tags": [
+        "shop",
+        "lab4"
+      ],
+      "time": {
+        "from": "now-30m",
+        "to": "now"
+      },
       "timezone": "browser",
-      "title": "Shop — Lab 3",
-      "uid": "shop-lab3",
+      "title": "Shop — Lab 4: overload",
+      "uid": "shop-lab4",
       "version": 1
     }
