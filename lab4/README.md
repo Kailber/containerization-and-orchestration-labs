@@ -571,6 +571,14 @@ helm upgrade shop ./helm/shop --kube-context kind-lab4 -n lab4
 получает те же ресурсы, что и основной контейнер PostgreSQL.
 Фактический QoS после обновления проверяется через `.status.qosClass`.
 
+После Helm upgrade все три новые реплики API и PostgreSQL получили
+`Guaranteed`, класс `shop-critical` и приоритет `100000`.
+Batch получил `Burstable`, `shop-batch`, `-1000`.
+Оба worker остались `Burstable` с приоритетом `0`.
+Deployment API готов `3/3` и полностью обновлён; batch — `1/1`, worker — `2/2`.
+
+![Фактические QoS и приоритеты после обновления](images/part5/18-qos-priorities.png)
+
 Batch получает `shop-batch` с приоритетом `-1000` и остаётся Burstable:
 requests `100m / 96Mi` заметно ниже limits `500m / 192Mi`.
 Worker сохраняет приоритет по умолчанию `0` и Burstable.
@@ -597,12 +605,20 @@ Guaranteed также не отменяет собственный memory limit 
 | PDB | minAvailable | Смысл |
 | --- | --- | --- |
 | `shop-api` | `2` | При штатном обслуживании через Eviction API сохраняются минимум две доступные реплики API |
-| `shop-postgres` | `1` | Единственный primary нельзя добровольно выселить через Eviction API |
+| `shop-postgres-critical` | `1` | Единственный primary нельзя добровольно выселить через Eviction API |
 
 Автоматический PDB CloudNativePG отключён через
 `postgres.operatorPDBEnabled: false` → `Cluster.spec.enablePDB: false`.
 Вместо него чарт создаёт собственный PDB с селектором primary, чтобы один
 Pod не попадал одновременно под два разных бюджета.
+
+Первая проверка обнаружила только `shop-api`. Первоначальное имя PDB базы
+`shop-postgres` совпало с именем бюджета реплик, которое резервирует CNPG.
+Даже при `enablePDB: false` оператор выполняет очистку своих стандартных
+имён. Поэтому имя PDB чарта изменено на `shop-postgres-critical`
+([имена PDB в исходниках CNPG](https://github.com/cloudnative-pg/cloudnative-pg/blob/release-1.30/pkg/specs/poddisruptionbudget.go)).
+
+![Первичная проверка: PDB API есть, PDB PostgreSQL отсутствует](images/part5/19-pdb-missing-postgres.png)
 
 PDB ограничивает добровольные disruptions через Eviction API. Он не
 защищает от отказа ноды, OOM и node-pressure eviction, не запрещает прямое
