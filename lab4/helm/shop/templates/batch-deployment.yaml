@@ -18,6 +18,10 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       priorityClassName: {{ printf "%s-%s" .Release.Name .Values.batch.priorityClass | quote }}
+      {{- with .Values.batch.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532

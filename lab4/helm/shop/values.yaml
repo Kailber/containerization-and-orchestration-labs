@@ -27,14 +27,14 @@ postgres:
   # Short graceful shutdown windows for the local lab, in seconds.
   smartShutdownTimeout: 10
   stopDelay: 60
-  # Requests from krr/report.json; equal limits give Guaranteed QoS.
+  # Measured maxima from krr/guaranteed-report.json (simple-limit p100).
   resources:
     requests:
-      cpu: 16m
-      memory: 100Mi
+      cpu: 37m
+      memory: 103Mi
     limits:
-      cpu: 16m
-      memory: 100Mi
+      cpu: 37m
+      memory: 103Mi
 
 scheduling:
   # Supported choices: podAntiAffinity, topologySpreadConstraints.
@@ -49,7 +49,7 @@ scheduling:
       - pod-template-hash
 
 api:
-  replicas: 3
+  replicas: 4
   priorityClass: critical
   pdb:
     enabled: true
@@ -92,8 +92,12 @@ worker:
       memory: 100Mi
 
 batch:
-  replicas: 1
+  replicas: 3
   priorityClass: batch
+  # Part 6: 16000m allocatable - 1220m other requests = 14780m.
+  # Two batch Pods reserve 2 * 7390m; the third remains Pending.
+  nodeSelector:
+    kubernetes.io/hostname: lab4-control-plane
   image:
     repository: lab4-batch
     tag: v1
@@ -102,10 +106,10 @@ batch:
   memoryMiB: 64
   resources:
     requests:
-      cpu: 100m
+      cpu: 7390m
       memory: 96Mi
     limits:
-      cpu: 500m
+      cpu: 14780m
       memory: 192Mi
 
 monitoring:
