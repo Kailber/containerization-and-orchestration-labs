@@ -1,0 +1,12 @@
+[
+  {
+    "time": "2026-10-24T15:44:43Z",
+    "label": "Batch: 1024 MiB",
+    "source": "Helm revision 14 LAST DEPLOYED, 18:44:43 MSK"
+  },
+  {
+    "time": "2026-10-24T15:44:57Z",
+    "label": "Evicted: batch",
+    "source": "Kubernetes Event firstTimestamp for shop-batch-6d7db56d5b-6xrc8"
+  }
+]

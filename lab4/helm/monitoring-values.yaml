@@ -1,0 +1,12 @@
+# Overlay for the lab 2 monitoring values in the new standalone kind cluster.
+# Loki and the lab 2 webhook receiver are not deployed here.
+grafana:
+  additionalDataSources: []
+
+alertmanager:
+  config:
+    route:
+      receiver: "null"
+      routes: []
+    receivers:
+      - name: "null"

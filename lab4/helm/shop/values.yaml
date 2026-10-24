@@ -1,0 +1,122 @@
+database:
+  # Empty means the application Secret created by CloudNativePG.
+  existingSecret: ""
+  secretKey: uri
+
+priorityClasses:
+  critical:
+    value: 100000
+    preemptionPolicy: PreemptLowerPriority
+    description: Critical shop API and PostgreSQL
+  batch:
+    value: -1000
+    preemptionPolicy: PreemptLowerPriority
+    description: Disposable background batch workload
+
+postgres:
+  instances: 1
+  database: shop
+  owner: shop
+  storageSize: 1Gi
+  priorityClass: critical
+  # The chart owns the PDB; disable the operator's overlapping primary PDB.
+  operatorPDBEnabled: false
+  pdb:
+    enabled: true
+    minAvailable: 1
+  # Short graceful shutdown windows for the local lab, in seconds.
+  smartShutdownTimeout: 10
+  stopDelay: 60
+  # Measured maxima from krr/guaranteed-report.json (simple-limit p100).
+  resources:
+    requests:
+      cpu: 37m
+      memory: 103Mi
+    limits:
+      cpu: 37m
+      memory: 103Mi
+
+scheduling:
+  # Supported choices: podAntiAffinity, topologySpreadConstraints.
+  mechanism: topologySpreadConstraints
+  topologyKey: kubernetes.io/hostname
+  topologySpread:
+    maxSkew: 1
+    minDomains: 2
+    whenUnsatisfiable: DoNotSchedule
+    # Balance each Deployment revision independently during rollout.
+    matchLabelKeys:
+      - pod-template-hash
+
+api:
+  replicas: 4
+  priorityClass: critical
+  pdb:
+    enabled: true
+    minAvailable: 2
+
+  image:
+    repository: lab3-api
+    tag: v3
+    pullPolicy: Never
+
+  port: 8080
+  healthFail: false
+
+  # Requests from krr/report.json; equal limits give Guaranteed QoS.
+  resources:
+    requests:
+      cpu: 10m
+      memory: 100Mi
+    limits:
+      cpu: 10m
+      memory: 100Mi
+
+worker:
+  replicas: 2
+
+  image:
+    repository: lab3-worker
+    tag: v2
+    pullPolicy: Never
+
+  port: 8082
+
+  # Requests and memory limit from krr/report.json; finite CPU limit retained.
+  resources:
+    requests:
+      cpu: 10m
+      memory: 100Mi
+    limits:
+      cpu: 200m
+      memory: 100Mi
+
+batch:
+  replicas: 3
+  priorityClass: batch
+  # Part 6: 16000m allocatable - 1220m other requests = 14780m.
+  # Two batch Pods reserve 2 * 7390m; the third remains Pending.
+  nodeSelector:
+    kubernetes.io/hostname: lab4-control-plane
+  image:
+    repository: lab4-batch
+    tag: v1
+    pullPolicy: Never
+  cpuWorkers: 1
+  memoryMiB: 64
+  resources:
+    requests:
+      cpu: 7390m
+      memory: 96Mi
+    limits:
+      cpu: 14780m
+      memory: 192Mi
+
+monitoring:
+  namespace: lab2
+  releaseLabel: monitoring
+  interval: 15s
+  alerts:
+    for: 1m
+    apiMinReplicas: 3
+    batchMinReplicas: 1

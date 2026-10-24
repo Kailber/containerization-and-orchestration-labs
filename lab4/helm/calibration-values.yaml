@@ -1,0 +1,19 @@
+# Temporary measurement profile: original CPU/memory limits from part 2.
+# Equal requests and limits preserve Guaranteed during calibration.
+# Final resources must come from a new krr report under order load.
+api:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+postgres:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
