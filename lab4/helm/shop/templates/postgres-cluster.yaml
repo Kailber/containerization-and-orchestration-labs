@@ -7,6 +7,10 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   instances: {{ .Values.postgres.instances }}
+  priorityClassName: {{ printf "%s-%s" .Release.Name .Values.postgres.priorityClass | quote }}
+  enablePDB: {{ .Values.postgres.operatorPDBEnabled }}
+  smartShutdownTimeout: {{ .Values.postgres.smartShutdownTimeout }}
+  stopDelay: {{ .Values.postgres.stopDelay }}
   inheritedMetadata:
     labels:
       app: postgres

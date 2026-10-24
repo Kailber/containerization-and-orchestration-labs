@@ -32,7 +32,9 @@ lab4/
 └── images/
     ├── part0/
     ├── part2/
-    └── part3/
+    ├── part3/
+    ├── part4/
+    └── part5/
 ```
 
 ---
@@ -487,3 +489,135 @@ PostgreSQL вернулся в `Cluster in healthy state`.
 
 **Результат:** рекомендации krr для API, worker и PostgreSQL перенесены
 в values и применены через Helm; rollout завершён. ✅
+
+---
+
+# Часть 4 — Разнесение критического сервиса
+
+В шаблон Deployment API добавлен выбор механизма размещения через
+`scheduling.mechanism`. Ветка `topologySpreadConstraints` использует
+следующие параметры `values.yaml`:
+
+```yaml
+scheduling:
+  mechanism: topologySpreadConstraints
+  topologyKey: kubernetes.io/hostname
+  topologySpread:
+    maxSkew: 1
+    minDomains: 2
+    whenUnsatisfiable: DoNotSchedule
+    matchLabelKeys:
+      - pod-template-hash
+```
+
+Топологический домен — отдельная нода. При двух доступных нодах разница
+числа реплик не должна превышать одну: для трёх реплик ожидается `2+1`.
+`DoNotSchedule` запрещает новые размещения, нарушающие ограничение.
+`minDomains: 2` задаёт минимум двух доступных доменов для обычного расчёта
+баланса: если их меньше, глобальный минимум принимается равным нулю.
+Это не создаёт недостающую ноду и может оставлять новые Pod в Pending.
+
+Селектор учитывает `app: api` и имя Helm-релиза, поэтому worker, batch
+и поды другого релиза не участвуют в подсчёте. `pod-template-hash`
+позволяет считать баланс каждой ревизии Deployment отдельно во время
+обновления, когда одновременно существуют старые и новые Pod
+([документация Kubernetes](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/)).
+
+Альтернативная ветка `podAntiAffinity` использует жёсткое правило
+`requiredDuringSchedulingIgnoredDuringExecution` на том же topologyKey.
+При трёх репликах и двух нодах она оставит третью реплику Pending,
+что объясняет выбор topology spread для этой площадки.
+Неизвестное значение `scheduling.mechanism` останавливает рендеринг чарта.
+
+Разнесение снижает риск одновременной потери всех реплик API при отказе
+одной ноды. Оно не устраняет единую точку отказа PostgreSQL:
+в этой лабораторной у базы один экземпляр и локальный том.
+Доступность всего пути заказа нельзя вывести только из размещения API.
+
+Применение правила выполняется через Helm:
+
+```bash
+helm upgrade shop ./helm/shop --kube-context kind-lab4 -n lab4
+```
+
+После обновления Deployment API готов `3/3`, `UP-TO-DATE 3`.
+Две реплики размещены на `lab4-control-plane`, одна — на `lab4-worker`.
+Все три Pod работают без перезапусков.
+
+![Реплики API распределены между двумя нодами](images/part4/17-api-spread.png)
+
+**Результат:** выбранный механизм применён через чарт, распределение `2+1`
+подтверждено `kubectl get pods -o wide`. ✅
+
+---
+
+# Часть 5 — Приоритеты и гарантии
+
+### QoS и приоритеты
+
+В чарт добавлен шаблон `priority-class.yaml`. Значения приоритетов,
+политика preemption и выбор класса для сервисов задаются в `values.yaml`.
+Классы не являются глобальными по умолчанию.
+
+| Компонент | PriorityClass | Приоритет | CPU requests = limits | Память requests = limits | Целевой QoS |
+| --- | --- | --- | --- | --- | --- |
+| API | `shop-critical` | `100000` | `10m` | `100Mi` | Guaranteed |
+| PostgreSQL | `shop-critical` | `100000` | `16m` | `100Mi` | Guaranteed |
+
+Числа requests взяты из krr части 3. Для Guaranteed CPU limits приравнены
+к этим requests, а не удалены, как предлагает стратегия `simple`.
+Равенство выполняется для CPU и памяти у всех контейнеров Pod.
+Проверка существующего Pod CNPG показала, что `bootstrap-controller`
+получает те же ресурсы, что и основной контейнер PostgreSQL.
+Фактический QoS после обновления проверяется через `.status.qosClass`.
+
+Batch получает `shop-batch` с приоритетом `-1000` и остаётся Burstable:
+requests `100m / 96Mi` заметно ниже limits `500m / 192Mi`.
+Worker сохраняет приоритет по умолчанию `0` и Burstable.
+Политика классов `PreemptLowerPriority` позволяет планировщику освобождать
+место для нового высокоприоритетного Pod за счёт более низких приоритетов.
+Сам по себе уже работающий высокий приоритет не запускает preemption.
+
+Приоритет и QoS решают разные задачи. Scheduler выбирает жертв preemption
+по приоритету и возможности разместить ожидающий Pod; QoS не является
+критерием этого выбора. При давлении по памяти kubelet сначала учитывает,
+превышает ли потребление requests, затем приоритет, затем величину
+потребления относительно requests. Поэтому Burstable batch, превышающий
+memory request и имеющий низкий приоритет, менее защищён, чем критический
+Guaranteed Pod. Одного названия Burstable недостаточно, чтобы гарантировать
+порядок жертв: это нужно проверить при фактическом давлении в части 7.
+Guaranteed также не отменяет собственный memory limit и CPU throttling
+([приоритеты](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/),
+[node-pressure eviction](https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/)).
+
+### PodDisruptionBudget
+
+В `pod-disruption-budget.yaml` добавлены бюджеты:
+
+| PDB | minAvailable | Смысл |
+| --- | --- | --- |
+| `shop-api` | `2` | При штатном обслуживании через Eviction API сохраняются минимум две доступные реплики API |
+| `shop-postgres` | `1` | Единственный primary нельзя добровольно выселить через Eviction API |
+
+Автоматический PDB CloudNativePG отключён через
+`postgres.operatorPDBEnabled: false` → `Cluster.spec.enablePDB: false`.
+Вместо него чарт создаёт собственный PDB с селектором primary, чтобы один
+Pod не попадал одновременно под два разных бюджета.
+
+PDB ограничивает добровольные disruptions через Eviction API. Он не
+защищает от отказа ноды, OOM и node-pressure eviction, не запрещает прямое
+удаление Pod контроллером при rollout. Для scheduler preemption соблюдение
+PDB является best effort, а не абсолютным запретом.
+
+### Штатная остановка PostgreSQL
+
+Для локального эксперимента в values заданы `smartShutdownTimeout: 10`
+и `stopDelay: 60` секунд. Они передаются в CNPG Cluster через чарт:
+сначала PostgreSQL может дождаться закрытия соединений, затем оператор
+использует штатный fast shutdown. Это сокращает ожидание открытых
+соединений при последующих обновлениях вместо прежнего окна 180 секунд.
+Сокращение окна относится к этой учебной базе.
+
+```bash
+helm upgrade shop ./helm/shop --kube-context kind-lab4 -n lab4
+```

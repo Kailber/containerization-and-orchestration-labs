@@ -17,6 +17,7 @@ spec:
         app: batch
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
+      priorityClassName: {{ printf "%s-%s" .Release.Name .Values.batch.priorityClass | quote }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532

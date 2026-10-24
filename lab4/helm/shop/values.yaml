@@ -3,18 +3,37 @@ database:
   existingSecret: ""
   secretKey: uri
 
+priorityClasses:
+  critical:
+    value: 100000
+    preemptionPolicy: PreemptLowerPriority
+    description: Critical shop API and PostgreSQL
+  batch:
+    value: -1000
+    preemptionPolicy: PreemptLowerPriority
+    description: Disposable background batch workload
+
 postgres:
   instances: 1
   database: shop
   owner: shop
   storageSize: 1Gi
-  # Requests and memory limit from krr/report.json; finite CPU limit retained.
+  priorityClass: critical
+  # The chart owns the PDB; disable the operator's overlapping primary PDB.
+  operatorPDBEnabled: false
+  pdb:
+    enabled: true
+    minAvailable: 1
+  # Short graceful shutdown windows for the local lab, in seconds.
+  smartShutdownTimeout: 10
+  stopDelay: 60
+  # Requests from krr/report.json; equal limits give Guaranteed QoS.
   resources:
     requests:
       cpu: 16m
       memory: 100Mi
     limits:
-      cpu: 500m
+      cpu: 16m
       memory: 100Mi
 
 scheduling:
@@ -31,6 +50,10 @@ scheduling:
 
 api:
   replicas: 3
+  priorityClass: critical
+  pdb:
+    enabled: true
+    minAvailable: 2
 
   image:
     repository: lab3-api
@@ -40,13 +63,13 @@ api:
   port: 8080
   healthFail: false
 
-  # Requests and memory limit from krr/report.json; finite CPU limit retained.
+  # Requests from krr/report.json; equal limits give Guaranteed QoS.
   resources:
     requests:
       cpu: 10m
       memory: 100Mi
     limits:
-      cpu: 200m
+      cpu: 10m
       memory: 100Mi
 
 worker:
@@ -70,6 +93,7 @@ worker:
 
 batch:
   replicas: 1
+  priorityClass: batch
   image:
     repository: lab4-batch
     tag: v1

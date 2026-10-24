@@ -1,0 +1,31 @@
+{{- if .Values.api.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ .Release.Name }}-api
+  labels:
+    app: api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  minAvailable: {{ .Values.api.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      app: api
+      app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+{{- if .Values.postgres.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ .Release.Name }}-postgres
+  labels:
+    app: postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  minAvailable: {{ .Values.postgres.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      cnpg.io/cluster: {{ .Release.Name }}-postgres
+      cnpg.io/instanceRole: primary
+{{- end }}

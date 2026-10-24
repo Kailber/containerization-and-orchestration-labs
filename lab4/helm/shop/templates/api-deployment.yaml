@@ -25,6 +25,7 @@ spec:
         app: api
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
+      priorityClassName: {{ printf "%s-%s" .Release.Name .Values.api.priorityClass | quote }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
