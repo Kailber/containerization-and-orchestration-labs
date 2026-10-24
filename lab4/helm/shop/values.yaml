@@ -1,0 +1,94 @@
+database:
+  # Empty means the application Secret created by CloudNativePG.
+  existingSecret: ""
+  secretKey: uri
+
+postgres:
+  instances: 1
+  database: shop
+  owner: shop
+  storageSize: 1Gi
+  # Requests and memory limit from krr/report.json; finite CPU limit retained.
+  resources:
+    requests:
+      cpu: 16m
+      memory: 100Mi
+    limits:
+      cpu: 500m
+      memory: 100Mi
+
+scheduling:
+  # Supported choices: podAntiAffinity, topologySpreadConstraints.
+  mechanism: topologySpreadConstraints
+  topologyKey: kubernetes.io/hostname
+  topologySpread:
+    maxSkew: 1
+    minDomains: 2
+    whenUnsatisfiable: DoNotSchedule
+    # Balance each Deployment revision independently during rollout.
+    matchLabelKeys:
+      - pod-template-hash
+
+api:
+  replicas: 3
+
+  image:
+    repository: lab3-api
+    tag: v3
+    pullPolicy: Never
+
+  port: 8080
+  healthFail: false
+
+  # Requests and memory limit from krr/report.json; finite CPU limit retained.
+  resources:
+    requests:
+      cpu: 10m
+      memory: 100Mi
+    limits:
+      cpu: 200m
+      memory: 100Mi
+
+worker:
+  replicas: 2
+
+  image:
+    repository: lab3-worker
+    tag: v2
+    pullPolicy: Never
+
+  port: 8082
+
+  # Requests and memory limit from krr/report.json; finite CPU limit retained.
+  resources:
+    requests:
+      cpu: 10m
+      memory: 100Mi
+    limits:
+      cpu: 200m
+      memory: 100Mi
+
+batch:
+  replicas: 1
+  image:
+    repository: lab4-batch
+    tag: v1
+    pullPolicy: Never
+  cpuWorkers: 1
+  memoryMiB: 64
+  resources:
+    requests:
+      cpu: 100m
+      memory: 96Mi
+    limits:
+      cpu: 500m
+      memory: 192Mi
+
+monitoring:
+  namespace: lab2
+  releaseLabel: monitoring
+  interval: 15s
+  alerts:
+    for: 1m
+    apiMinReplicas: 3
+    workerMinReplicas: 2

@@ -1,0 +1,35 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app: {{ .Release.Name }}
+    release: {{ .Values.monitoring.releaseLabel }}
+spec:
+  groups:
+    - name: {{ .Release.Name }}.availability
+      rules:
+        - alert: ShopApiInsufficientReplicas
+          expr: kube_deployment_status_replicas_available{namespace="{{ .Release.Namespace }}", deployment="{{ .Release.Name }}-api"} < {{ .Values.monitoring.alerts.apiMinReplicas }}
+          for: {{ .Values.monitoring.alerts.for }}
+          labels:
+            severity: critical
+          annotations:
+            summary: Shop API has insufficient ready replicas
+            description: Shop API has fewer than {{ .Values.monitoring.alerts.apiMinReplicas }} available replicas.
+        - alert: ShopWorkerInsufficientReplicas
+          expr: kube_deployment_status_replicas_available{namespace="{{ .Release.Namespace }}", deployment="{{ .Release.Name }}-worker"} < {{ .Values.monitoring.alerts.workerMinReplicas }}
+          for: {{ .Values.monitoring.alerts.for }}
+          labels:
+            severity: warning
+          annotations:
+            summary: Shop worker has insufficient ready replicas
+            description: Shop worker has fewer than {{ .Values.monitoring.alerts.workerMinReplicas }} available replicas.
+        - alert: ShopPostgresUnavailable
+          expr: (sum(kube_pod_status_ready{namespace="{{ .Release.Namespace }}", pod=~"{{ .Release.Name }}-postgres-[0-9]+", condition="true"}) or vector(0)) < 1
+          for: {{ .Values.monitoring.alerts.for }}
+          labels:
+            severity: critical
+          annotations:
+            summary: Shop PostgreSQL is unavailable
+            description: No ready CloudNativePG instance is available for shop.
