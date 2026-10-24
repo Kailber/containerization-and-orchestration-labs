@@ -1,0 +1,18 @@
+# Part 7 preparation. Apply after calibration-values.yaml to retain the
+# working critical-service resources while changing only batch placement.
+batch:
+  replicas: 1
+  rollingUpdate:
+    maxSurge: 0
+    maxUnavailable: 100%
+  nodeSelector:
+    kubernetes.io/hostname: lab4-worker
+  cpuWorkers: 1
+  memoryMiB: 64
+  resources:
+    requests:
+      cpu: 100m
+      memory: 96Mi
+    limits:
+      cpu: 500m
+      memory: 1536Mi
