@@ -5,6 +5,7 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 import gzip
 import json
+import math
 from pathlib import Path
 
 import matplotlib
@@ -29,6 +30,9 @@ def main():
     parser.add_argument("dataset", type=Path)
     parser.add_argument("--events", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--scenario", default="eviction")
+    parser.add_argument("--latency-file", default="34-memory-latency.png")
+    parser.add_argument("--errors-file", default="35-memory-errors.png")
     args = parser.parse_args()
     durations, failures = [], []
     requests = dropped = 0
@@ -71,7 +75,7 @@ def main():
             if 0 <= offset <= duration:
                 ax.axvline(offset, color=["#64748b", "#a855f7"][index % 2],
                            linestyle=":", label=event["label"])
-        ax.set_xlim(0, 300)
+        ax.set_xlim(0, max(10, math.ceil(duration / 10) * 10))
         ax.set_xlabel("Время от начала прогона, с")
         ax.grid(alpha=0.2)
         ax.legend(loc="upper right", fontsize=9)
@@ -82,21 +86,22 @@ def main():
     ax.plot(x, window_p95, color="#0f766e", linewidth=2, label="p95 за 10 секунд")
     ax.axhline(300, color="#dc2626", linestyle="--", label="Порог p95: 300 мс")
     ax.set_ylabel("Задержка HTTP, мс")
-    ax.set_title(f"Заказы во время eviction: общий p95 = {percentile(values, .95):.2f} мс")
+    ax.set_title(f"Заказы во время {args.scenario}: общий p95 = {percentile(values, .95):.2f} мс")
     decorate(ax)
-    fig.savefig(args.output / "34-memory-latency.png", dpi=170)
+    fig.savefig(args.output / args.latency_file, dpi=170)
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=(12, 4.5), layout="constrained")
-    ax.plot(x, [100 * sum(errors[i]) / len(errors[i]) for i in indices],
+    window_errors = [100 * sum(errors[i]) / len(errors[i]) for i in indices]
+    ax.plot(x, window_errors,
             color="#0f766e", marker="o", markersize=3, label="Ошибки за 10 секунд")
     ax.axhline(1, color="#dc2626", linestyle="--", label="Порог ошибок: 1%")
-    ax.set_ylim(-0.1, 1.6)
+    ax.set_ylim(-0.1, max(1.6, max(window_errors) * 1.1))
     ax.set_ylabel("HTTP-ошибки, %")
     ax.set_title(f"{int(requests)} запросов; ошибок {int(sum(v for _, v in failures))}; "
                  f"пропущенных итераций {int(dropped)}")
     decorate(ax)
-    fig.savefig(args.output / "35-memory-errors.png", dpi=170)
+    fig.savefig(args.output / args.errors_file, dpi=170)
     plt.close(fig)
 
     print(json.dumps({
