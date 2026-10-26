@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-api
+  labels:
+    app: api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.api.replicas }}
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      app: api
+      app.kubernetes.io/instance: {{ .Release.Name }}
+
+  template:
+    metadata:
+      labels:
+        app: api
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      priorityClassName: {{ printf "%s-%s" .Release.Name .Values.api.priorityClass | quote }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+
+      {{- if eq .Values.scheduling.mechanism "topologySpreadConstraints" }}
+      topologySpreadConstraints:
+        - maxSkew: {{ .Values.scheduling.topologySpread.maxSkew }}
+          minDomains: {{ .Values.scheduling.topologySpread.minDomains }}
+          topologyKey: {{ .Values.scheduling.topologyKey | quote }}
+          whenUnsatisfiable: {{ .Values.scheduling.topologySpread.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              app: api
+              app.kubernetes.io/instance: {{ .Release.Name }}
+          matchLabelKeys:
+            {{- toYaml .Values.scheduling.topologySpread.matchLabelKeys | nindent 12 }}
+      {{- else if eq .Values.scheduling.mechanism "podAntiAffinity" }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: {{ .Values.scheduling.topologyKey | quote }}
+              labelSelector:
+                matchLabels:
+                  app: api
+                  app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- else }}
+      {{- fail "scheduling.mechanism must be topologySpreadConstraints or podAntiAffinity" }}
+      {{- end }}
+
+      containers:
+        - name: api
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+
+          ports:
+            - name: http
+              containerPort: {{ .Values.api.port }}
+
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.existingSecret | default (printf "%s-postgres-app" .Release.Name) | quote }}
+                  key: {{ .Values.database.secretKey | quote }}
+            - name: HEALTH_FAIL
+              value: {{ .Values.api.healthFail | quote }}
+
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 3
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10

@@ -1,0 +1,21 @@
+# Repeat on 2026-10-25. Apply after calibration-values.yaml.
+# Control-plane: 16000m allocatable - 1610m non-batch requests = 14390m.
+# Two batch Pods reserve the remainder; a third must stay Pending.
+api:
+  replicas: 4
+batch:
+  replicas: 3
+  rollingUpdate:
+    maxSurge: 0
+    maxUnavailable: 100%
+  nodeSelector:
+    kubernetes.io/hostname: lab4-control-plane
+  cpuWorkers: 1
+  memoryMiB: 64
+  resources:
+    requests:
+      cpu: 7195m
+      memory: 96Mi
+    limits:
+      cpu: 14390m
+      memory: 192Mi

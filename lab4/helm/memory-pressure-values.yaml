@@ -1,0 +1,4 @@
+# Apply after memory-baseline-values.yaml. The payload is below the container
+# limit but above the 512 MiB node headroom configured for the experiment.
+batch:
+  memoryMiB: 1024

@@ -1,0 +1,8 @@
+[
+  {
+    "time": "2026-10-25T13:56:23.307456Z",
+    "label": "Preempted: batch",
+    "source": "Kubernetes Event shop-batch-5489dd887b-k78jf.18e1ca52b8d824f5",
+    "message": "Preempted by pod 3caf01f4-4b82-41a8-aa5c-cf1417287545 on node lab4-control-plane"
+  }
+]
