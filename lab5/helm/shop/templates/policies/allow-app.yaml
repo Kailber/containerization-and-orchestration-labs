@@ -1,0 +1,60 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: shop-api
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Values.networkPolicy.api.labels.app }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - port: {{ .Values.networkPolicy.api.port }}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: {{ index .Values.networkPolicy.postgres.labels "cnpg.io/cluster" | quote }}
+      ports:
+        - port: {{ .Values.networkPolicy.postgres.port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: shop-worker
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Values.networkPolicy.worker.labels.app }}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: {{ index .Values.networkPolicy.postgres.labels "cnpg.io/cluster" | quote }}
+      ports:
+        - port: {{ .Values.networkPolicy.postgres.port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: shop-client
+spec:
+  podSelector:
+    matchLabels:
+      run: {{ .Values.networkPolicy.client.labels.run }}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: {{ .Values.networkPolicy.api.labels.app }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.api.port }}
+{{- end }}

@@ -1,0 +1,42 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: no-privileged
+  annotations:
+    policies.kyverno.io/title: "Запрет привилегированных контейнеров"
+    policies.kyverno.io/description: >-
+      Запрещает privileged-режим, ограничивая их доступ к ресурсам нод
+spec:
+  background: true
+  rules:
+    - name: check-privileged
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kube-public
+                - kube-node-lease
+                - kyverno
+      validate:
+        failureAction: Enforce
+        failureActionOverrides:
+          - action: Audit
+            namespaces:
+              - lab2
+        message: "Контейнеры не должны использовать privileged: true"
+        pattern:
+          spec:
+            containers:
+              - name: "*"
+                =(securityContext):
+                  =(privileged): false
+            =(initContainers):
+              - name: "*"
+                =(securityContext):
+                  =(privileged): false
